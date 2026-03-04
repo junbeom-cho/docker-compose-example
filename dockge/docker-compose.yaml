@@ -1,0 +1,16 @@
+version: "3.8"
+services:
+  dockge:
+    image: louislam/dockge:1
+    restart: unless-stopped
+    ports:
+      - 5001:5001
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/docker/dockge/data:/app/data
+      # 중요: 우리가 만든 /opt/docker 폴더 전체를 관리하도록 설정
+      - /opt/docker:/opt/stacks
+    environment:
+      # Dockge에게 스택들이 저장될 위치 알려주기
+      - DOCKGE_STACKS_DIR=/opt/stacks
+networks: {}
