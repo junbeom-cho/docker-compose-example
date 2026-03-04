@@ -1,16 +1,43 @@
-version: "3.8"
 services:
   dockge:
+    container_name: dockge
     image: louislam/dockge:1
     restart: unless-stopped
     ports:
       - 5001:5001
     volumes:
+      # 도커 소켓 마운트
       - /var/run/docker.sock:/var/run/docker.sock
-      - /opt/docker/dockge/data:/app/data
-      # 중요: 우리가 만든 /opt/docker 폴더 전체를 관리하도록 설정
-      - /opt/docker:/opt/stacks
+      # dockge 데이터 볼륨
+      - ./data:/app/data
+      # dockge에서 관리할 스택 파일 볼륨 
+      - /opt/stacks:/opt/stacks
     environment:
-      # Dockge에게 스택들이 저장될 위치 알려주기
-      - DOCKGE_STACKS_DIR=/opt/stacks
-networks: {}
+      # dockge에서 관리할 스택 파일 경로 설정
+      DOCKGE_STACKS_DIR: /opt/stacks
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=dockge"
+    networks:
+      - npm_default
+networks:
+  npm_default:
+    external: true
+
