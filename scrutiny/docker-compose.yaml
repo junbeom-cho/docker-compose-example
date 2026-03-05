@@ -1,0 +1,35 @@
+# ==========================================================
+# Scrutiny : 드라이브 모니터링 도구
+# ==========================================================
+
+services:
+  scrutiny:
+    image: ghcr.io/analogj/scrutiny:master-omnibus
+    container_name: scrutiny
+    privileged: true
+    restart: unless-stopped
+    # NVMe 드라이브 모니터링을 위해 높은 권한 필요
+    cap_add:
+      - SYS_RAWIO
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    ports:
+      - 10006:8080 # Web UI 접근: http://100.x.x.x:15000
+    volumes:
+      - /run/udev:/run/udev:ro
+      - /opt/stacks/scrutiny/config:/opt/scrutiny/config
+      - /opt/stacks/scrutiny/influxdb:/opt/scrutiny/influxdb
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /dev:/dev:ro
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Seoul
+      - SCRUTINY_COLLECTOR_API_ENDPOINT=http://localhost:8080
+    devices:
+      # 실제 드라이브인 nvme0n1 매핑
+      - /dev/nvme0n1:/dev/nvme0n1
+      - /dev/nvme0:/dev/nvme0    # 컨트롤러 접근용
+networks: {}

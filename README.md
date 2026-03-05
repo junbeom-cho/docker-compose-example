@@ -15,13 +15,13 @@
 
 ### 네이밍 규칙
 - 폴더 및 파일명 : `kebab-case`
-- 컨테이너명 : `snake_case`
+- 컨테이너명 : 서비스명 그대로 사용
 - 네트워크명 : `snake_case`
 - API 및 비밀번호 등 민감정보 : `UPPER_SNAKE_CASE`
 
 ### compose 작성 규칙
 - compose의 환경변수를 작성할 때 `KEY: VALUE`의 형태로 작성한다.
-- 기본은 `latest` 버전으로 명시하나 서비스에 따라 수정한다.
+- image의 버전은 실제 사용 중인 버전을 기본으로 하나 사용하기 전 stable 버전을 확인한다.
 
 ### 3. 실행 및 관리
 
@@ -42,3 +42,12 @@ docker compose up -d
 docker logs -f <container-name>
 ```
 
+## 3. 구성
+
+### 폴더 구조
+
+### 분류
+
+#### Infrastructure & Management
+- [dockge](/dockge/docker-compose.yaml) : Docker 관리 GUI
+- [uptime-kuma](/uptime-kuma/docker-compose.yaml) : 서비스 모니터링 GUI

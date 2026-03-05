@@ -1,3 +1,7 @@
+# ==========================================================
+# Dockge : Docker GUI 관리 도구
+# ==========================================================
+
 services:
   dockge:
     container_name: dockge
@@ -8,15 +12,23 @@ services:
     volumes:
       # 도커 소켓 마운트
       - /var/run/docker.sock:/var/run/docker.sock
-      # dockge 데이터 볼륨
+      # dockge 데이터 볼륨 마운트
       - ./data:/app/data
-      # dockge에서 관리할 스택 파일 볼륨 
+      # dockge에서 관리할 스택 파일 볼륨 마운트
       - /opt/stacks:/opt/stacks
     environment:
       # dockge에서 관리할 스택 파일 경로 설정
       DOCKGE_STACKS_DIR: /opt/stacks
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5001"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:5001",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -35,9 +47,4 @@ services:
         max-size: "10m"
         max-file: "3"
         labels: "service=dockge"
-    networks:
-      - npm_default
-networks:
-  npm_default:
-    external: true
-
+networks: {}
