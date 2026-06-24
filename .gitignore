@@ -9,3 +9,5 @@ containerd/
 
 /docusaurus
 /quartz-blog
+/adguard-home/confdir/
+/adguard-home/workdir/
