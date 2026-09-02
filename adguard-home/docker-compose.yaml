@@ -1,9 +1,9 @@
 services:
   adguardhome:
-    image: adguard/adguardhome:latest
+    image: adguard/adguardhome:v0.107.79
     container_name: adguardhome
     network_mode: host
     volumes:
-      - ./workdir:/opt/adguardhome/work
-      - ./confdir:/opt/adguardhome/conf
+      - ${DATA_DIR:-.}/work:/opt/adguardhome/work
+      - ${DATA_DIR:-.}/conf:/opt/adguardhome/conf
     restart: unless-stopped
