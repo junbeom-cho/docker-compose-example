@@ -4,8 +4,8 @@ services:
     container_name: adguardhome
     network_mode: host
     ports:
-      - ${PORT:-3000}:3000
+      - ${PORT}:3000
     volumes:
-      - ${DATA_DIR:-.}/work:/opt/adguardhome/work
-      - ${DATA_DIR:-.}/conf:/opt/adguardhome/conf
+      - ${DATA_DIR}/work:/opt/adguardhome/work
+      - ${DATA_DIR}/conf:/opt/adguardhome/conf
     restart: unless-stopped
