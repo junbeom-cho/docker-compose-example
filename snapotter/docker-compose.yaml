@@ -1,6 +1,6 @@
 services:
   snapotter:
-    image: snapotter/snapotter:v2.2.0
+    image: snapotter/snapotter:2.2.0
     container_name: snapotter
     ports:
       - ${PORT}:1349
