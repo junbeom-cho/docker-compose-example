@@ -1,0 +1,38 @@
+services:
+  snapotter:
+    image: snapotter/snapotter:v2.2.0
+    container_name: snapotter
+    ports:
+      - ${PORT}:1349
+    environment:
+      # Requests are served by a role that can only read and write rows. The
+      # owner connects only during boot, to migrate and to grant.
+      DATABASE_URL: postgres://${POSTGRES_APP_USER}:${POSTGRES_APP_PASSWORD}@${POSTGRES_HOST}:5432/${POSTGRES_DB}
+      DATABASE_MIGRATION_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/${POSTGRES_DB}
+      REDIS_URL: redis://snapotter-redis:6379
+    volumes:
+      - ${DATA_DIR}:/data
+    depends_on:
+      - snapotter-redis
+    restart: unless-stopped
+    networks:
+      - default
+      - caddy-network
+      - postgresql-network
+  
+  snapotter-redis:
+    image: redis:8-alpine
+    container_name: snapotter-redis
+    volumes:
+      - ${DATA_DIR}/redis:/data
+    restart: unless-stopped
+    networks:
+      - default
+
+networks:
+  default:
+    name: snapotter-network
+  caddy-network:
+    external: true
+  postgresql-network:
+    external: true
