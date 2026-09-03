@@ -20,7 +20,7 @@ services:
       max_parallel_workers_per_gather=2 -c max_parallel_workers=4 -c
       max_parallel_maintenance_workers=2
     volumes:
-      - /opt/data/postgresql/data:/var/lib/postgresql/data:rw
+      - ${DATA_DIR}/data:/var/lib/postgresql/data:rw
     environment:
       # PostgreSQL 슈퍼유저 비밀번호
       - POSTGRES_PASSWORD=${PG_ROOT_PASSWORD}
@@ -31,9 +31,6 @@ services:
     security_opt:
       - no-new-privileges:true
     shm_size: 256mb
-    # Tugtainer 보호 라벨 설정
-    labels:
-      dev.quenary.tugtainer.protected: "true"
     networks:
       - default
     # ==================================================
