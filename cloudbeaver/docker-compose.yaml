@@ -10,9 +10,9 @@ services:
     container_name: cloudbeaver
     restart: unless-stopped
     ports:
-      - 14000:8978
+      - ${PORT}:8978
     volumes:
-      - /opt/data/cloudbeaver:/opt/cloudbeaver/workspace:rw
+      - ${DATA_DIR}/cloudbeaver:/opt/cloudbeaver/workspace:rw
     environment:
       - TZ=Asia/Seoul
     networks:
