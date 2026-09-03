@@ -18,8 +18,8 @@ services:
       - 1.1.1.1
       - 1.0.0.1
     networks:
-      - proxy
+      - default
 
 networks:
-  proxy:
-    external: true
+  default:
+    name: caddy-network
