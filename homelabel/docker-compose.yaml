@@ -1,6 +1,7 @@
 services:
   backend:
     image: ghcr.io/pouzor/homelable-backend:latest
+    container_name: homelable-backend
     restart: unless-stopped
     environment:
       SQLITE_PATH: /app/data/homelab.db
@@ -20,6 +21,7 @@ services:
 
   frontend:
     image: ghcr.io/pouzor/homelable-frontend:latest
+    container_name: homelabel-frontend
     restart: unless-stopped
     ports:
       - "3000:80"
@@ -30,6 +32,7 @@ services:
 
   mcp:
     image: ghcr.io/pouzor/homelable-mcp:latest
+    container_name: homelable-mcp
     restart: unless-stopped
     ports:
       - "8001:8001"
