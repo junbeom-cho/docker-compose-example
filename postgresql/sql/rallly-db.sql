@@ -1,3 +1,0 @@
-CREATE USER rallly_user WITH PASSWORD '${PG_RALLLY_USER_PASSWORD}';
-CREATE DATABASE rallly_db OWNER rallly_user;
-GRANT ALL PRIVILEGES ON DATABASE rallly_db TO rallly_user;

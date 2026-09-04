@@ -1,55 +1,30 @@
-# ==================================================
-# Dozzle : Docker 컨테이너 로그 실시간 뷰어
-# Avg CPU: 0.5 ~ 2%
-# Avg Memory: 100MB
-# ==================================================
+# Dozzle - Docker 컨테이너 로그 실시간 뷰어
+# 도커 소켓을 읽어 호스트의 모든 컨테이너 로그를 웹에서 실시간으로 확인한다.
+# 접속: http://localhost:8080
 
 services:
+  # 로그 뷰어 본체 (내부 기본 포트 8080)
   dozzle:
     image: ghcr.io/amir20/dozzle:latest
     container_name: dozzle
     restart: unless-stopped
     ports:
-      - 12001:8080
+      - "8080:8080"
     volumes:
+      # 도커 소켓 - 로그를 읽기만 하므로 읽기 전용(ro)
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /opt/data/dozzle:/data
+      # 알림/설정 저장용
+      - ./data:/data
     environment:
-      - TZ=Asia/Seoul
+      TZ: Asia/Seoul
     networks:
       - default
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      test:
-        - CMD
-        - /dozzle
-        - healthcheck
-      interval: 3s
-      timeout: 30s
-      retries: 5
-      start_period: 30s
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
           cpus: "0.5"
           memory: 256M
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=dozzle
-# ==================================================
-# 네트워크 설정
-# ==================================================
+
 networks:
   default:
-    name: dozzle-network
+    name: dozzle

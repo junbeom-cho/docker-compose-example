@@ -1,89 +1,58 @@
-# ==================================================
-# Pingvin Share X : 파일 공유 및 관리 서비스
-# ==================================================
+# Pingvin Share X : 셀프호스팅 파일 공유 서비스 (Pingvin Share 포크)
+# 파일을 올려 만료 기간/비밀번호가 걸린 공유 링크를 만들고, 역방향 공유(수령)도 지원한다.
+# 업로드된 파일은 ClamAV 로 바이러스 검사하며, ClamAV 가 healthy 가 된 뒤에 본체가 뜬다.
+# 첫 실행 후 http://localhost:3000 에서 관리자 계정을 만든다.
 
 services:
-  # ==================================================
-  # Pingvin Share X 웹서버
-  # 평균 CPU : 0 ~ 0.5%
-  # 평균 메모리 : 200MB
-  # ==================================================
+  # Pingvin Share X 본체 (웹 UI + API, 컨테이너 내부 Caddy 가 3000 으로 합쳐서 서빙)
   pingvin-share-x:
-    container_name: pingvin-share-x
     image: smp46/pingvin-share-x
+    container_name: pingvin-share-x
     restart: unless-stopped
     ports:
-      - 13005:3000
-      - 13006:8080
+      - "3000:3000"
     environment:
-      - TRUST_PROXY=true
-      - CLAMAV_HOST=clamav
+      # 리버스 프록시 뒤에 둘 때만 true (X-Forwarded-* 헤더를 신뢰)
+      TRUST_PROXY: "false"
+      # 바이러스 검사에 사용할 ClamAV 호스트 (아래 clamav 서비스)
+      CLAMAV_HOST: clamav
     volumes:
-      - /opt/data/pingvin-share-x:/opt/app/backend/data:rw,z
-      - /opt/data/pingvin-share-x/images:/opt/app/frontend/public/img:rw,z
-    networks:
-      - default
+      # 업로드 파일과 SQLite DB
+      - ./data/backend:/opt/app/backend/data
+      # 로고 등 UI 커스터마이징 이미지
+      - ./data/images:/opt/app/frontend/public/img
     depends_on:
       clamav:
         condition: service_healthy
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      disable: false
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: "1.0"
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=pingvin-share-x
-  # ==================================================
-  # ClamAV : 바이러스 스캐닝 서비스
-  # 평균 CPU : 0 ~ 0.5% (스캔 시 일시적 증가)
-  # 평균 메모리 : 1GB
-  # ==================================================
-  clamav:
-    container_name: clamav
-    image: clamav/clamav
-    restart: unless-stopped
     networks:
       - default
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      disable: false
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
-          memory: 1G
           cpus: "1.0"
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=clamav
-# ==================================================
-# 네트워크 설정
-# ==================================================
+          memory: 1G
+
+  # ClamAV 바이러스 검사 데몬 (3310 포트로 내부 통신만, 외부 노출 없음)
+  clamav:
+    image: clamav/clamav
+    container_name: pingvin-share-x-clamav
+    restart: unless-stopped
+    # pingvin-share-x 가 service_healthy 를 기다리므로 필요 (시그니처 DB 로딩에 1~2분 걸림)
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 6m
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          # 시그니처 DB 를 메모리에 올리므로 2G 미만이면 기동에 실패할 수 있다
+          memory: 2G
+
 networks:
   default:
-    name: pingvin-share-x-network
+    name: pingvin-share-x

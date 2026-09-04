@@ -1,0 +1,29 @@
+# SilverBullet : 마크다운 파일 기반의 개인 노트/PKM 웹앱.
+# 노트는 DB 가 아니라 ./space 폴더에 그냥 .md 파일로 쌓이므로 Obsidian 등과 같이 써도 된다.
+# http://localhost:3000 접속 후 .env 의 계정(admin / SB_PASSWORD)으로 로그인한다.
+
+services:
+  # SilverBullet 본체 (기본 포트 3000)
+  silverbullet:
+    image: ghcr.io/silverbulletmd/silverbullet:latest
+    container_name: silverbullet
+    restart: unless-stopped
+    environment:
+      # 로그인 계정. "사용자명:비밀번호" 한 문자열로 넣어야 한다
+      SB_USER: "admin:${SB_PASSWORD}"
+    ports:
+      - "3000:3000"
+    volumes:
+      # 여기에 마운트된 폴더가 노트 저장소(space) 루트가 된다
+      - ./space:/space
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+networks:
+  default:
+    name: silverbullet

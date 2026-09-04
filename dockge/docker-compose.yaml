@@ -1,50 +1,32 @@
-# ==================================================
-# Dockge : Docker Compose 스택 관리 웹 UI
-# 평균 CPU : 1 ~ 5%
-# 평균 메모리 : 150MB
-# ==================================================
+# Dockge : Docker Compose 스택을 웹 UI에서 관리하는 도구
+# 컨테이너/스택 생성, 편집, 로그 확인, 시작/중지를 브라우저에서 처리한다.
+# 접속: http://localhost:5001
 
 services:
+  # Dockge 웹 UI 본체
   dockge:
     image: louislam/dockge:1.5.0
     container_name: dockge
     restart: unless-stopped
     ports:
-      - 10000:5001
+      - "5001:5001"
     volumes:
+      # 호스트 도커 데몬 제어용 소켓
       - /var/run/docker.sock:/var/run/docker.sock
-      - /opt/data/dockge:/app/data
-      - /opt/stacks:/opt/stacks
+      - ./data:/app/data
+      # Dockge가 관리할 스택(compose 파일) 디렉터리
+      - ./stacks:/opt/stacks
     environment:
-      # Dockge가 감시하고 관리할 스택 디렉터리 경로
-      - DOCKGE_STACKS_DIR=/opt/stacks
+      # 스택 디렉터리의 컨테이너 내부 경로 (위 마운트의 우측과 동일해야 함)
+      DOCKGE_STACKS_DIR: /opt/stacks
     networks:
       - default
-    # ==================================================
-    # 헬스체크 - 헬스체크 커맨드가 없음
-    # ==================================================
-
-
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
           cpus: "1"
           memory: 1G
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=dockge
-# ==================================================
-# 네트워크 설정
-# ==================================================
+
 networks:
   default:
-    name: dockge-network
+    name: dockge

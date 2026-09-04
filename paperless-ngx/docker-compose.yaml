@@ -1,230 +1,137 @@
-# ==================================================
-# Paperless-ngx : 문서 OCR/아카이빙 플랫폼
-# ==================================================
+# Paperless-ngx : 셀프호스팅 문서 OCR/아카이빙 서비스
+# 스캔한 문서를 OCR 해서 텍스트로 검색 가능한 PDF 로 보관한다.
+# consume 폴더에 파일을 넣으면 자동으로 취합·색인되며, http://localhost:8000 에서 첫 계정을 만든다.
+# webserver + PostgreSQL + Redis(broker) + Gotenberg(PDF 변환) + Tika(오피스 문서 텍스트 추출) 구성.
 
 services:
-  # ==================================================
-  # Paperless-ngx 웹서버
-  # 평균 CPU : 0 ~ 1%
-  # 평균 메모리 : 500MB ~ 1GB
-  # ==================================================
+  # Paperless-ngx 본체 (웹 UI + 워커)
   webserver:
     image: ghcr.io/paperless-ngx/paperless-ngx:latest
     container_name: paperless-webserver
     restart: unless-stopped
-    depends_on:
-      - broker
-      - gotenberg
-      - tika
     ports:
-      - 13007:8000
+      - "8000:8000"
     volumes:
-      - /opt/data/paperless-ngx/data/data:/usr/src/paperless/data
-      - /opt/data/paperless-ngx/data/media:/usr/src/paperless/media
-      - /opt/data/paperless-ngx/data/export:/usr/src/paperless/export
-      - /opt/data/paperless-ngx/data/consume:/usr/src/paperless/consume
+      # 색인/썸네일 등 내부 데이터
+      - ./data/data:/usr/src/paperless/data
+      # 원본 및 아카이브 문서 저장소
+      - ./data/media:/usr/src/paperless/media
+      # 내보내기 결과물
+      - ./data/export:/usr/src/paperless/export
+      # 여기에 파일을 넣으면 자동으로 취합된다
+      - ./data/consume:/usr/src/paperless/consume
     environment:
-      # 컨테이너 프로세스 실행 사용자 UID
-      - USERMAP_UID=1000
-      # 컨테이너 프로세스 실행 그룹 GID
-      - USERMAP_GID=1000
-      # 컨테이너 내부 표준 시간대
-      - TZ=Asia/Seoul
-      # 외부 접근 기준 URL
-      - PAPERLESS_URL=https://paperless.junbeom.work
-      # 허용할 Host 헤더 목록
-      - PAPERLESS_ALLOWED_HOSTS=*
-      # CORS 허용 출처
-      - PAPERLESS_CORS_ALLOWED_HOSTS=https://paperless.junbeom.work
-      # PostgreSQL 호스트명
-      - PAPERLESS_DBHOST=postgresql
-      # PostgreSQL 포트
-      - PAPERLESS_DBPORT=5432
-      # PostgreSQL 데이터베이스 이름
-      - PAPERLESS_DBNAME=${PG_PAPERLESS_DATABASE}
-      # PostgreSQL 사용자명
-      - PAPERLESS_DBUSER=${PG_PAPERLESS_USER}
-      # PostgreSQL 비밀번호
-      - PAPERLESS_DBPASS=${PG_PAPERLESS_USER_PASSWORD}
-      # Redis 연결 URL
-      - PAPERLESS_REDIS=redis://broker:6379
-      # OCR 지원 언어 목록
-      - PAPERLESS_OCR_LANGUAGES=kor eng
-      # 기본 OCR 언어
-      - PAPERLESS_OCR_LANGUAGE=kor
-      # Tika/Gotenberg 연동 활성화 여부
-      - PAPERLESS_TIKA_ENABLED=1
-      # Gotenberg API 엔드포인트
-      - PAPERLESS_TIKA_GOTENBERG_ENDPOINT=http://gotenberg:3000
-      # Apache Tika API 엔드포인트
-      - PAPERLESS_TIKA_ENDPOINT=http://tika:9998
-      # 역방향 프록시 헤더 기반 사용자 인증 활성화
-      - PAPERLESS_ENABLE_HTTP_REMOTE_USER=true
-      # 인증 사용자명을 전달받을 HTTP 헤더명
-      - PAPERLESS_HTTP_REMOTE_USER_HEADER_NAME=HTTP_X_AUTHENTIK_USERNAME
-      # Tugtainer 보호 라벨 설정
-    labels:
-      dev.quenary.tugtainer.protected: "true"
+      # 컨테이너 프로세스 실행 사용자/그룹 (마운트 폴더 소유권을 맞추기 위함)
+      USERMAP_UID: 1000
+      USERMAP_GID: 1000
+      TZ: Asia/Seoul
+      # 외부 접근 기준 URL. CSRF 허용 출처가 이 값으로 정해지므로
+      # 다른 PC/도메인에서 접속하면 그 주소로 바꿔야 로그인이 된다
+      PAPERLESS_URL: http://localhost:8000
+      # 허용할 Host 헤더 목록 (호스트 IP 로 접근해도 뜨도록 전체 허용)
+      PAPERLESS_ALLOWED_HOSTS: "*"
+      PAPERLESS_DBENGINE: postgresql
+      PAPERLESS_DBHOST: postgres
+      PAPERLESS_DBPORT: 5432
+      PAPERLESS_DBNAME: paperless
+      PAPERLESS_DBUSER: paperless
+      PAPERLESS_DBPASS: ${PAPERLESS_POSTGRES_PASSWORD}
+      PAPERLESS_REDIS: redis://broker:6379
+      # OCR 대상 언어 (한국어+영어). 언어팩은 이미지에 포함되어 있다
+      PAPERLESS_OCR_LANGUAGES: kor eng
+      PAPERLESS_OCR_LANGUAGE: kor
+      # 오피스/이메일 문서 처리를 위해 Tika·Gotenberg 연동 사용
+      PAPERLESS_TIKA_ENABLED: 1
+      PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://gotenberg:3000
+      PAPERLESS_TIKA_ENDPOINT: http://tika:9998
+    depends_on:
+      postgres:
+        condition: service_healthy
+      broker:
+        condition: service_started
+      gotenberg:
+        condition: service_started
+      tika:
+        condition: service_started
     networks:
       - default
-      - postgresql-network
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      disable: true
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
-          memory: 2G
           cpus: "1.0"
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=paperless-webserver
-  # ==================================================
-  # Paperless-ngx redis
-  # 평균 CPU : 0 ~ 0.5%
-  # 평균 메모리 : 10MB
+          memory: 2G
+
+  # Paperless 전용 PostgreSQL (외부 노출 없이 내부 통신만)
+  postgres:
+    image: postgres:17
+    container_name: paperless-postgres
+    restart: unless-stopped
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: ${PAPERLESS_POSTGRES_PASSWORD}
+    # webserver 가 DB 준비 완료를 기다리기 위해 필요
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paperless -d paperless"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  # 작업 큐용 Redis (외부 노출 없이 내부 통신만)
   broker:
     image: docker.io/library/redis:7
     container_name: paperless-redis
     restart: unless-stopped
     volumes:
-      - /opt/data/paperless-ngx/redis:/data
-      # Tugtainer 보호 라벨 설정
-    labels:
-      dev.quenary.tugtainer.protected: "true"
+      - ./data/redis:/data
     networks:
       - default
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      test:
-        - CMD
-        - redis-cli
-        - ping
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
           cpus: "0.5"
           memory: 256M
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=paperless-redis
-  # ==================================================
-  # Gotenberg : PDF 변환 서비스
-  # 평균 CPU : 0 ~ 0.5%
-  # 평균 메모리 : 10MB
-  # ==================================================
+
+  # Gotenberg : 오피스 문서를 PDF 로 변환 (내부 통신만)
   gotenberg:
     image: docker.io/gotenberg/gotenberg:8
     container_name: paperless-gotenberg
     restart: unless-stopped
+    # Paperless 권장 옵션 : 변환 시 JS 비활성화, 로컬 임시파일만 허용
     command:
       - gotenberg
       - --chromium-disable-javascript=true
       - --chromium-allow-list=file:///tmp/.*
-    # Tugtainer 보호 라벨 설정
-    labels:
-      dev.quenary.tugtainer.protected: "true"
     networks:
       - default
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      test:
-        - CMD
-        - wget
-        - --quiet
-        - --tries=1
-        - --spider
-        - http://localhost:3000/health
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
-          memory: 512M
           cpus: "0.5"
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=paperless-gotenberg
-  # ==================================================
-  # Apache Tika : 문서 텍스트 추출 서비스
-  # 평균 CPU : 0 ~ 0.5%
-  # 평균 메모리 : 400MB
-  # ==================================================
+          memory: 512M
+
+  # Apache Tika : 오피스/이메일 문서에서 텍스트 추출 (내부 통신만)
   tika:
     image: docker.io/apache/tika:latest
     container_name: paperless-tika
     restart: unless-stopped
-    # Tugtainer 보호 라벨 설정
-    labels:
-      dev.quenary.tugtainer.protected: "true"
     networks:
       - default
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      disable: true
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
-          memory: 2G
           cpus: "1.0"
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=paperless-tika
-# ==================================================
-# 네트워크 설정
-# ==================================================
+          memory: 2G
+
 networks:
   default:
-    name: paperless-network
-  postgresql-network:
-    external: true
+    name: paperless-ngx

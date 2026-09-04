@@ -1,179 +1,65 @@
-# ==================================================
-# NPMplus : 리버스 프록시/SSL 관리 + CrowdSec
-# ==================================================
+# NPMplus : nginx-proxy-manager 포크. 리버스 프록시 + Let's Encrypt 인증서 자동 발급.
+# 80/443 으로 트래픽을 받고, 관리 UI 는 https://localhost:81 (HTTP 아님, HTTPS).
+# 최초 계정은 admin@example.org 이며 랜덤 비밀번호가 로그에 찍힌다: docker compose logs npmplus
+# CrowdSec 은 nginx 접근 로그를 분석해 공격 IP 를 탐지한다.
 
 services:
-  # ==================================================
-  # NPMplus : 리버스 프록시/SSL 관리
-  # 평균 CPU : 0 ~ 1%
-  # 평균 메모리 : 100MB
-  # ==================================================
+  # 리버스 프록시 본체 (관리 UI 포함)
   npmplus:
     image: docker.io/zoeyvid/npmplus:latest
     container_name: npmplus
     restart: unless-stopped
     ports:
-      - 80:80/tcp
-      - 443:443/tcp
-      - 443:443/udp
-      - 10001:81/tcp
+      - "80:80/tcp"
+      - "443:443/tcp"
+      # HTTP/3(QUIC)용 UDP
+      - "443:443/udp"
+      # 관리 UI. 외부에 열지 말 것
+      - "81:81/tcp"
     volumes:
-      - /opt/data/npmplus/data:/data
+      # 설정 DB, 발급받은 인증서, nginx 로그가 전부 여기에 쌓인다
+      - ./data:/data
     environment:
-      # 컨테이너 내부 표준 시간대
-      - TZ=Asia/Seoul
-      # 컨테이너 프로세스 실행 사용자 UID
-      - PUID=1000
-      # 컨테이너 프로세스 실행 그룹 GID
-      - PGID=1000
-      # 내부 로그 로테이션 활성화 여부
-      - LOGROTATE=true
-      # 로그 보관 세대 수
-      - LOGROTATIONS=7
-      # IPv6 비활성화 여부
-      - DISABLE_IPV6=true
-      # Tugtainer 보호 라벨 설정
-    labels:
-      dev.quenary.tugtainer.protected: "true"
+      TZ: Asia/Seoul
+      # 접근 로그를 /data/nginx/logs 에 파일로 남긴다 (CrowdSec 분석에 필수)
+      LOGROTATE: "true"
+      # nginx 의 IPv6 리스닝/리졸버를 끈다. IPv6 없는 도커 브리지 기본값에 맞춤
+      DISABLE_IPV6: "true"
     networks:
       - default
-      - authentik-network
-      - filebrowser-network
-      - homepage-network
-      - it-tools-network
-      - mealie-network
-      - quartz-network
-      - paperless-network
-      - pingvin-share-x-network
-      - rallly-network
-      - shlink-network
-      - stirling-pdf-network
-      - uptime-kuma-network
-      - vaultwarden-network
-      - outline-network
-      - affine-network
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      test:
-        - CMD
-        - wget
-        - --quiet
-        - --tries=1
-        - --spider
-        - http://localhost:81
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
-          memory: 1G
           cpus: "1.0"
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=npmplus
-  # ==================================================
-  # CrowdSec : 보안 이벤트 감지 및 대응
-  # 평균 CPU : 0 ~ 0.5%
-  # 평균 메모리 : 50MB
-  # ==================================================
+          memory: 1G
+
+  # CrowdSec : nginx 로그 기반 침입 탐지.
+  # 기동만으로 차단되지는 않는다. 실제 차단은 컨테이너 안에서 acquis.d 설정 추가 +
+  # `docker exec npmplus_crowdsec cscli bouncers add npmplus` 로 발급한 키를 NPMplus UI 에 넣어야 한다.
   crowdsec:
     image: docker.io/crowdsecurity/crowdsec:latest
     container_name: npmplus_crowdsec
     restart: unless-stopped
-    ports:
-      - 11003:8080
     volumes:
-      - /opt/data/npmplus/crowdsec/conf:/etc/crowdsec
-      - /opt/data/npmplus/crowdsec/data:/var/lib/crowdsec/data
-      - /opt/data/npmplus/data/logs:/var/log/npmplus:ro
+      # 최초 실행 시 이미지 기본 설정이 자동으로 채워진다
+      - ./crowdsec/conf:/etc/crowdsec
+      - ./crowdsec/data:/var/lib/crowdsec/data
+      # npmplus 가 남긴 접근 로그를 읽기 전용으로 공유 (컨테이너 내부 경로는 업스트림 기준 고정)
+      - ./data/nginx/logs:/opt/npmplus/nginx/logs:ro
     environment:
-      # 컨테이너 내부 표준 시간대
-      - TZ=Asia/Seoul
-      # 로드할 CrowdSec 컬렉션 목록
-      - COLLECTIONS=crowdsecurity/nginx-proxy-manager
-      # 로그 파일 접근 그룹 GID
-      - GID=1000
-    # Tugtainer 보호 라벨 설정
-    labels:
-      dev.quenary.tugtainer.protected: "true"
-    networks:
-      - default
+      TZ: Asia/Seoul
+      # NPMplus 전용 파서/시나리오 모음
+      COLLECTIONS: ZoeyVid/npmplus
     depends_on:
       - npmplus
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - pgrep crowdsec >/dev/null || exit 1
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
+    networks:
+      - default
     deploy:
       resources:
         limits:
-          memory: 512M
           cpus: "0.5"
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=npmplus-crowdsec
-# ==================================================
-# 네트워크 설정
-# ==================================================
+          memory: 512M
+
 networks:
   default:
-    name: npmplus-network
-  authentik-network:
-    external: true
-  filebrowser-network:
-    external: true
-  homepage-network:
-    external: true
-  it-tools-network:
-    external: true
-  mealie-network:
-    external: true
-  quartz-network:
-    external: true
-  paperless-network:
-    external: true
-  pingvin-share-x-network:
-    external: true
-  rallly-network:
-    external: true
-  shlink-network:
-    external: true
-  stirling-pdf-network:
-    external: true
-  uptime-kuma-network:
-    external: true
-  vaultwarden-network:
-    external: true
-  outline-network:
-    external: true
-  affine-network:
-    external: true
+    name: npmplus

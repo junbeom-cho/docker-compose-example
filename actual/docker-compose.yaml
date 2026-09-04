@@ -1,0 +1,25 @@
+# Actual Budget - 셀프호스팅 개인 가계부(복식부기 기반 예산 관리) 서버.
+# 웹 UI 와 동기화 서버가 한 컨테이너에 들어 있고, 데이터는 ./data 에 SQLite 로 쌓인다.
+# 첫 접속 시 브라우저에서 관리자 비밀번호를 직접 정하므로 별도 환경변수가 없다.
+services:
+  # 웹 UI + 동기화 서버 (기본 포트 5006)
+  actual:
+    image: docker.io/actualbudget/actual-server:latest
+    container_name: actual
+    restart: unless-stopped
+    ports:
+      - "5006:5006"
+    volumes:
+      # 예산 파일과 서버 DB 가 전부 여기 들어간다
+      - ./data:/data
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+
+networks:
+  default:
+    name: actual

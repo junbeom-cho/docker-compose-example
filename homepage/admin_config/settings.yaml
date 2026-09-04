@@ -1,9 +1,0 @@
----
-# For configuration options and examples, please see:
-# https://gethomepage.dev/configs/settings/
-
-title: "Admin Homepage"
-
-providers:
-  openweathermap: openweathermapapikey
-  weatherapi: weatherapiapikey

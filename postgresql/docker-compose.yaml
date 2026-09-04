@@ -1,69 +1,35 @@
-# ==================================================
-# PostgreSQL : 공용 데이터베이스 서버
-# 평균 CPU : 1 ~ 5%
-# 평균 메모리 : 400MB
-# ==================================================
-
+# PostgreSQL — 여러 앱이 함께 쓰는 공용 관계형 데이터베이스 서버.
+# 5432 포트로 접속하고, 데이터는 ./data 아래에 저장된다.
+# 첫 기동 시 POSTGRES_PASSWORD 로 postgres 슈퍼유저가 만들어진다.
 services:
+  # PostgreSQL 서버 본체.
   postgresql:
     image: postgres:17
     container_name: postgresql
     restart: unless-stopped
     ports:
-      - ${PORT}:5432
-    command: >
-      postgres -c shared_buffers=256MB -c effective_cache_size=1GB -c
-      maintenance_work_mem=128MB -c checkpoint_completion_target=0.9 -c
-      wal_buffers=16MB -c default_statistics_target=100 -c random_page_cost=1.1
-      -c effective_io_concurrency=200 -c work_mem=4MB -c min_wal_size=1GB -c
-      max_wal_size=4GB -c max_worker_processes=4 -c
-      max_parallel_workers_per_gather=2 -c max_parallel_workers=4 -c
-      max_parallel_maintenance_workers=2
-    volumes:
-      - ${DATA_DIR}/data:/var/lib/postgresql/data:rw
+      - "5432:5432"
     environment:
-      # PostgreSQL 슈퍼유저 비밀번호
-      - POSTGRES_PASSWORD=${PG_ROOT_PASSWORD}
-      # 컨테이너 내부 표준 시간대
-      - TZ=Asia/Seoul
-      # 컨테이너 기본 로케일
-      - LANG=en_US.utf8
-    security_opt:
-      - no-new-privileges:true
+      # 슈퍼유저 이름과 기본 DB 이름 (첫 기동 때만 반영된다)
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      # 슈퍼유저 비밀번호 (첫 기동 때만 반영된다)
+      POSTGRES_PASSWORD: ${PG_ROOT_PASSWORD}
+      TZ: Asia/Seoul
+      # DB 기본 로케일
+      LANG: en_US.utf8
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    # 공유 메모리. 기본 64MB 로는 병렬 쿼리/정렬에서 부족할 수 있다
     shm_size: 256mb
     networks:
       - default
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - pg_isready -U postgres -d postgres
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
-          memory: 2G
           cpus: "2.0"
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=postgresql
-# ==================================================
-# 네트워크 설정
-# ==================================================
+          memory: 2G
+
 networks:
   default:
-    name: postgresql-network
+    name: postgresql

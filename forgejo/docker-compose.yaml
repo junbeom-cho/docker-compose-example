@@ -1,77 +1,72 @@
-# ==================================================
 # Forgejo : 자체 호스팅 Git 서비스
-# Avg CPU: 0 ~ 1%
-# Avg Memory: 500MB
-# ==================================================
+# Gitea 에서 포크된 경량 Git 저장소 호스팅 도구로, 웹 UI 와 SSH 로 저장소를 관리한다.
+# 데이터 저장을 위해 PostgreSQL 을 같은 스택에 포함한다.
+# 접속: http://localhost:3000 (최초 접속 시 설치 마법사에서 관리자 계정 생성)
 
 services:
+  # Forgejo 본체 (웹 UI + Git SSH)
   server:
     image: codeberg.org/forgejo/forgejo:14
     container_name: forgejo
     restart: unless-stopped
     ports:
-      - 14002:3000
-      - 14003:22
+      - "3000:3000"
+      # 컨테이너 SSH 는 22 번이지만 호스트 22 는 sshd 가 이미 쓰는 경우가 많아 2222 로 매핑
+      - "2222:22"
     volumes:
-      - /opt/data/forgejo:/data
+      - ./data/forgejo:/data
       - /etc/localtime:/etc/localtime:ro
     environment:
       # 컨테이너 프로세스 실행 사용자 UID
-      - USER_UID=1000
+      USER_UID: 1000
       # 컨테이너 프로세스 실행 그룹 GID
-      - USER_GID=1000
-      # Forgejo 데이터베이스 드라이버
-      - FORGEJO__database__DB_TYPE=postgres
-      # Forgejo 데이터베이스 호스트:포트
-      - FORGEJO__database__HOST=${PG_HOST}:${PG_PORT}
-      # Forgejo 데이터베이스 이름
-      - FORGEJO__database__NAME=${PG_FORGEJO_DATABASE}
-      # Forgejo 데이터베이스 사용자명
-      - FORGEJO__database__USER=${PG_FORGEJO_USER}
-      # Forgejo 데이터베이스 비밀번호
-      - FORGEJO__database__PASSWD=${PG_FORGEJO_USER_PASSWORD}
-      # Tugtainer 보호 라벨 설정
-    labels:
-      dev.quenary.tugtainer.protected: "true"
+      USER_GID: 1000
+      # FORGEJO__<섹션>__<키> 형식으로 app.ini 설정을 덮어쓴다
+      FORGEJO__database__DB_TYPE: postgres
+      FORGEJO__database__HOST: postgres:5432
+      FORGEJO__database__NAME: forgejo
+      FORGEJO__database__USER: forgejo
+      FORGEJO__database__PASSWD: ${POSTGRES_PASSWORD}
+      # 웹 UI 에 표시되는 클론 주소의 SSH 포트 (위 호스트 매핑과 맞춘다)
+      FORGEJO__server__SSH_PORT: 2222
+      # 실제 도메인으로 서비스하려면 이 값을 바꾸세요
+      FORGEJO__server__ROOT_URL: http://localhost:3000/
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
-      - postgresql-network
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      test:
-        - CMD
-        - wget
-        - --quiet
-        - --tries=1
-        - --spider
-        - http://localhost:3000
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
+      - default
     deploy:
       resources:
         limits:
-          memory: 1G
           cpus: "1.0"
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=forgejo
-# ==================================================
-# 네트워크 설정
-# ==================================================
+          memory: 1G
+
+  # Forgejo 전용 PostgreSQL (외부 노출 없이 내부 통신만)
+  postgres:
+    image: postgres:17
+    container_name: forgejo-postgres
+    restart: unless-stopped
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: forgejo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: forgejo
+    # forgejo 가 service_healthy 로 기동 순서를 기다리므로 헬스체크 필요
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forgejo -d forgejo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
 networks:
   default:
-    name: forgejo-network
-  postgresql-network:
-    external: true
+    name: forgejo

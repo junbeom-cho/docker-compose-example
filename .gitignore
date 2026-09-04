@@ -1,13 +1,9 @@
-# 공통
+# 실제 비밀값은 커밋하지 않는다 (.env-sample 만 커밋)
 .env
 !.env-sample
-**/.DS_Store
-containerd/
-**/data/
-**/config/
-**/logs/
 
-/docusaurus
-/quartz-blog
-/adguard-home/confdir/
-/adguard-home/workdir/
+# 컨테이너가 만드는 런타임 데이터.
+# 각 앱 폴더에는 docker-compose.yaml 과 .env-sample 만 커밋한다.
+*/*/
+
+**/.DS_Store

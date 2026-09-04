@@ -1,0 +1,98 @@
+# Outline : 팀 협업용 마크다운 위키/문서 서비스
+# 문서 저장에 PostgreSQL, 작업 큐/캐시에 Redis 를 사용한다.
+# 첨부파일은 로컬 디스크(./data/outline)에 저장된다.
+# 최초 로그인에는 OIDC 등 SSO 설정이 필요하다 (SMTP 매직링크는 첫 로그인 이후부터 동작).
+
+services:
+  # Outline 본체 (웹 UI)
+  outline:
+    image: docker.getoutline.com/outlinewiki/outline:latest
+    container_name: outline
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # 업로드된 첨부파일 저장 경로
+      - ./data/outline:/var/lib/outline/data
+    environment:
+      # 접속 주소. 리버스 프록시를 쓰면 그 주소로 바꾸세요
+      URL: http://localhost:3000
+      # https 강제 리다이렉트 해제 (localhost 로 접속하기 위해 필요)
+      FORCE_HTTPS: "false"
+      # 세션/쿠키 암호화 키 (openssl rand -hex 32)
+      SECRET_KEY: ${SECRET_KEY}
+      # 내부 유틸리티 엔드포인트 인증 키 (openssl rand -hex 32)
+      UTILS_SECRET: ${UTILS_SECRET}
+      DATABASE_URL: postgres://outline:${POSTGRES_PASSWORD}@postgres:5432/outline
+      # 같은 호스트의 DB 라 SSL 미사용
+      PGSSLMODE: disable
+      REDIS_URL: redis://redis:6379
+      # 첨부파일을 로컬 디스크에 저장 (미지정 시 기본값은 s3)
+      # 저장 경로는 FILE_STORAGE_LOCAL_ROOT_DIR 기본값 /var/lib/outline/data 를 그대로 사용
+      FILE_STORAGE: local
+      # 기본 인터페이스 언어
+      DEFAULT_LANGUAGE: ko_KR
+      # 알림 메일 / 매직링크 로그인용 SMTP. 실제 값으로 바꾸세요
+      SMTP_HOST: smtp.example.com
+      # 465 는 암시적 TLS. SMTP_SECURE 기본값이 true 라 별도 설정 불필요
+      SMTP_PORT: 465
+      SMTP_USERNAME: outline@example.com
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM_EMAIL: outline@example.com
+    depends_on:
+      postgres:
+        # DB 마이그레이션이 기동 시 실행되므로 준비될 때까지 대기
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+
+  # 문서 데이터 저장용 PostgreSQL (외부 노출 없음)
+  postgres:
+    image: postgres:17
+    container_name: outline-postgres
+    restart: unless-stopped
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: outline
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: outline
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U outline -d outline
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  # 작업 큐 / 실시간 협업용 Redis (외부 노출 없음)
+  redis:
+    image: redis:latest
+    container_name: outline-redis
+    restart: unless-stopped
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+networks:
+  default:
+    name: outline

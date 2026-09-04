@@ -1,9 +1,36 @@
+# AdGuard Home : 네트워크 전체에 적용되는 DNS 광고/추적 차단 서버
+# DNS 서버(53)로 동작하며 웹 관리 UI를 함께 제공한다.
+# 최초 실행 후 http://localhost:3000 에서 초기 설정 마법사를 진행하고,
+# 설정 완료 뒤에는 지정한 웹 포트(기본 80) http://localhost 로 접속한다.
+
 services:
+  # AdGuard Home 본체 (DNS + 웹 UI)
   adguardhome:
     image: adguard/adguardhome:v0.107.79
     container_name: adguardhome
-    network_mode: host
-    volumes:
-      - ${DATA_DIR}/work:/opt/adguardhome/work
-      - ${DATA_DIR}/conf:/opt/adguardhome/conf
     restart: unless-stopped
+    ports:
+      # 평문 DNS - 클라이언트의 DNS 서버로 이 주소를 지정한다
+      # 호스트의 53 번이 이미 쓰이는 중이면(리눅스의 systemd-resolved 등) 먼저 비워야 뜬다
+      - "53:53/tcp"
+      - "53:53/udp"
+      # 초기 설정 마법사 전용 포트 (설정 완료 후에는 사용되지 않음)
+      - "3000:3000/tcp"
+      # 설정 마법사에서 웹 UI 포트를 80 으로 선택했을 때 사용
+      - "80:80/tcp"
+    volumes:
+      # 통계/쿼리로그 등 런타임 데이터
+      - ./data/work:/opt/adguardhome/work
+      # AdGuardHome.yaml 설정 파일 (컨테이너 중지 상태에서만 직접 편집할 것)
+      - ./data/conf:/opt/adguardhome/conf
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+networks:
+  default:
+    name: adguard-home

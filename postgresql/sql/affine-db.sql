@@ -1,3 +1,0 @@
-CREATE USER affine_user WITH PASSWORD '${PG_AFFINE_USER_PASSWORD}';
-CREATE DATABASE affine_db OWNER affine_user;
-GRANT ALL PRIVILEGES ON DATABASE affine_db TO affine_user;

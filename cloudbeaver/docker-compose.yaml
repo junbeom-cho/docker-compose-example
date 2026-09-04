@@ -1,60 +1,28 @@
-# ==================================================
-# CloudBeaver : 웹 기반 데이터베이스 관리 도구
-# Avg CPU: 0.5 ~ 1%
-# Avg Memory: 400MB
-# ==================================================
+# CloudBeaver : 브라우저에서 쓰는 웹 기반 데이터베이스 관리 도구.
+# PostgreSQL, MySQL, SQLite 등에 접속해 SQL 편집기와 데이터 조회를 제공한다.
+# 접속 후 최초 1회 관리자 계정을 웹 화면에서 직접 만든다.
 
 services:
+  # CloudBeaver 웹 서버
   cloudbeaver:
     image: dbeaver/cloudbeaver:latest
     container_name: cloudbeaver
     restart: unless-stopped
     ports:
-      - ${PORT}:8978
+      - "8978:8978"
     volumes:
-      - ${DATA_DIR}/cloudbeaver:/opt/cloudbeaver/workspace:rw
+      # 워크스페이스에 설정, 관리자 계정, 등록한 DB 접속 정보가 모두 저장된다
+      - ./data:/opt/cloudbeaver/workspace
     environment:
-      - TZ=Asia/Seoul
+      TZ: Asia/Seoul
     networks:
       - default
-      - postgresql-network
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      disable: false
-      test:
-        - CMD
-        - curl
-        - -f
-        - http://localhost:8978/status
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-      start_interval: 5s
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
           cpus: "1.0"
           memory: 1G
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=cloudbeaver
-# ==================================================
-# 네트워크 설정
-# ==================================================
+
 networks:
   default:
-    name: cloudbeaver-network
-  postgresql-network:
-    external: true
+    name: cloudbeaver

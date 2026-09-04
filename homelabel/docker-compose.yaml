@@ -1,48 +1,85 @@
+# HomeLabel — 셀프호스팅 홈랩 인프라 시각화 도구.
+# 네트워크를 스캔해 장비를 찾고, 상태를 실시간으로 감시하며,
+# 랙/평면도 캔버스에 배치한다. AI 클라이언트용 MCP 서버도 함께 띄운다.
+# backend(API) + frontend(nginx SPA) + mcp 세 서비스로 구성된다.
 services:
+  # FastAPI API 서버. 스캐너와 상태 체커가 여기서 돈다.
   backend:
     image: ghcr.io/pouzor/homelable-backend:latest
-    container_name: homelable-backend
+    container_name: homelabel-backend
     restart: unless-stopped
     environment:
+      # JWT 서명 키. 기본값이 없어 비워두면 backend 가 뜨지 않는다
+      SECRET_KEY: ${SECRET_KEY}
+      # 로그인 계정 (기본 사용자명은 admin)
+      AUTH_USERNAME: admin
+      # bcrypt 해시. 평문 비밀번호가 아니다
+      AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH}
+      # MCP 서버가 백엔드에 붙을 때 쓰는 내부 인증 키 (mcp 쪽과 같은 값)
+      MCP_SERVICE_KEY: ${MCP_SERVICE_KEY}
       SQLITE_PATH: /app/data/homelab.db
+      # 브라우저로 접속하는 주소. 아래 frontend 포트 매핑과 일치해야 한다
       CORS_ORIGINS: '["http://localhost:3000"]'
+      # 스캔할 네트워크 대역. 본인 LAN 대역으로 바꾼다
+      SCANNER_RANGES: '["192.168.1.0/24"]'
     volumes:
-      - ${DATA_DIR}/data:/app/data
-    networks:
-      - default
+      - ./data:/app/data
+    # nmap 이 raw 소켓을 열어야 스캔이 된다
     cap_add:
       - NET_RAW
-    # MAC addresses: on this bridge network the scanner can never see them —
-    # ARP is layer 2 and every LAN host is one hop away behind the Docker
-    # gateway. To collect MACs (and so keep DHCP devices matched across an IP
-    # change), put the backend on the LAN: comment out the `networks:` key
-    # above and uncomment the line below (Linux hosts only).
+    # 브리지 네트워크에서는 MAC 주소를 볼 수 없다(ARP 는 L2).
+    # MAC 까지 수집하려면 아래 networks 를 지우고 이 줄을 켠다 (리눅스 호스트 전용).
     # network_mode: host
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
 
+  # React SPA 를 nginx 로 서빙하고 /api 는 backend:8000 으로 프록시한다.
   frontend:
     image: ghcr.io/pouzor/homelable-frontend:latest
     container_name: homelabel-frontend
     restart: unless-stopped
     ports:
+      # 컨테이너 nginx 는 80 을 듣지만, backend 의 CORS_ORIGINS 가
+      # localhost:3000 을 기대하므로 호스트는 3000 으로 고정한다
       - "3000:80"
     depends_on:
       - backend
     networks:
       - default
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
+  # AI 클라이언트(Claude 등)에 캔버스를 노출하는 MCP 서버.
   mcp:
     image: ghcr.io/pouzor/homelable-mcp:latest
-    container_name: homelable-mcp
+    container_name: homelabel-mcp
     restart: unless-stopped
     ports:
       - "8001:8001"
     environment:
       BACKEND_URL: "http://backend:8000"
+      # AI 클라이언트 → MCP 서버 인증 키
+      MCP_API_KEY: ${MCP_API_KEY}
+      # MCP 서버 → backend 인증 키 (backend 쪽과 같은 값)
+      MCP_SERVICE_KEY: ${MCP_SERVICE_KEY}
     depends_on:
       - backend
     networks:
       - default
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
 
 networks:
   default:
-    name: homelable-network
+    name: homelabel

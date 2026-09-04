@@ -1,3 +1,0 @@
-CREATE USER forgejo_user WITH PASSWORD '${PG_FORGEJO_USER_PASSWORD}';
-CREATE DATABASE forgejo_db OWNER forgejo_user;
-GRANT ALL PRIVILEGES ON DATABASE forgejo_db TO forgejo_user;

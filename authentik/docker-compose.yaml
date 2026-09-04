@@ -1,179 +1,102 @@
-# ==================================================
-# Authentik : SSO 및 ID 관리 솔루션
-# ==================================================
+# Authentik : 셀프호스팅 SSO / IdP (OAuth2, SAML, LDAP, 프록시 인증)
+# server(웹 UI + 인증 엔드포인트), worker(백그라운드 작업), postgresql(데이터 저장)로 구성된다.
+# 첫 실행 후 http://localhost:9000/if/flow/initial-setup/ 에서 관리자 계정을 만든다.
+# 2025.10 부터 Redis 의존성이 제거되어 캐시/작업 큐 모두 PostgreSQL을 사용한다.
 
 services:
-  # ==================================================
-  # Authentik 서버
-  # Avg CPU: 1 ~ 5%
-  # Avg Memory: 420MB
-  # ==================================================
+  # 웹 UI 및 인증 요청 처리
   server:
     image: ghcr.io/goauthentik/server:2026.2.1
     container_name: authentik_server
     command: server
     restart: unless-stopped
     ports:
-      - 11000:9000
-      - 11001:9443
+      - "9000:9000"
+      - "9443:9443"
     volumes:
-      - /opt/data/authentik/data:/data
-      - /opt/data/authentik/custom-templates:/templates
+      - ./data/authentik:/data
+      - ./data/templates:/templates
     environment:
-      # Authentik이 연결할 PostgreSQL 호스트명
-      - AUTHENTIK_POSTGRESQL__HOST=postgresql
-      # Authentik 데이터베이스 이름
-      - AUTHENTIK_POSTGRESQL__NAME=${PG_AUTHENTIK_DATABASE}
-      # Authentik 데이터베이스 비밀번호
-      - AUTHENTIK_POSTGRESQL__PASSWORD=${PG_AUTHENTIK_PASSWORD}
-      # Authentik 데이터베이스 사용자명
-      - AUTHENTIK_POSTGRESQL__USER=${PG_AUTHENTIK_USER}
-      # 세션/암호화용 시크릿 키
-      - AUTHENTIK_SECRET_KEY=${AUTHENTIK_SECRET_KEY}
-      - AUTHENTIK_REDIS__HOST=authentik_redis
-      # Tugtainer 보호 라벨 설정
-    labels:
-      dev.quenary.tugtainer.protected: "true"
+      # 접속할 PostgreSQL 컨테이너 이름
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
+      # 세션/토큰 암호화용 시크릿 키
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      TZ: Asia/Seoul
     depends_on:
-      redis:
+      postgresql:
         condition: service_healthy
     networks:
       - default
-      - postgresql-network
-    # ==================================================
-    # 헬스체크 - authentik_worker와 통합
-    # ==================================================
-
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
           cpus: "1.0"
           memory: 1G
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=authentik-server
-  # ==================================================
-  # Authentik 워커
-  # Avg CPU: 0.5 ~ 2%
-  # Avg Memory: 500MB
-  # ==================================================
+
+  # 정책 실행, 메일 발송, 인증서 갱신 등 백그라운드 작업 처리
   worker:
     image: ghcr.io/goauthentik/server:2026.2.1
     container_name: authentik_worker
     command: worker
     restart: unless-stopped
+    # 도커 소켓 접근을 위해 root로 실행
     user: root
     volumes:
+      # 아웃포스트를 도커로 배포할 때 사용
       - /var/run/docker.sock:/var/run/docker.sock
-      - /opt/data/authentik/data:/data
-      - /opt/data/authentik/certs:/certs
-      - /opt/data/authentik/custom-templates:/templates
+      - ./data/authentik:/data
+      - ./data/certs:/certs
+      - ./data/templates:/templates
     environment:
-      # Authentik이 연결할 PostgreSQL 호스트명
-      - AUTHENTIK_POSTGRESQL__HOST=postgresql
-      # Authentik 데이터베이스 이름
-      - AUTHENTIK_POSTGRESQL__NAME=${PG_AUTHENTIK_DATABASE}
-      # Authentik 데이터베이스 비밀번호
-      - AUTHENTIK_POSTGRESQL__PASSWORD=${PG_AUTHENTIK_PASSWORD}
-      # Authentik 데이터베이스 사용자명
-      - AUTHENTIK_POSTGRESQL__USER=${PG_AUTHENTIK_USER}
-      # 세션/암호화용 시크릿 키
-      - AUTHENTIK_SECRET_KEY=${AUTHENTIK_SECRET_KEY}
-      - AUTHENTIK_REDIS__HOST=authentik_redis
-      # Tugtainer 보호 라벨 설정
-    labels:
-      dev.quenary.tugtainer.protected: "true"
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      TZ: Asia/Seoul
     depends_on:
-      redis:
+      postgresql:
         condition: service_healthy
     networks:
       - default
-      - postgresql-network
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - ak healthcheck
-      start_period: 40s
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
           cpus: "1.0"
           memory: 1.5G
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=authentik-worker
-  # ==================================================
-  # Authentik Redis
-  # Avg CPU: 0.5 ~ 2%
-  # Avg Memory: 10MB
-  # ==================================================
-  redis:
-    image: redis:alpine
-    container_name: authentik_redis
-    command: --save 60 1 --loglevel warning
+
+  # Authentik 전용 데이터베이스 (내부 통신만 하므로 포트 미노출)
+  postgresql:
+    image: postgres:17
+    container_name: authentik_postgresql
     restart: unless-stopped
-    # Tugtainer 보호 라벨 설정
-    labels:
-      dev.quenary.tugtainer.protected: "true"
+    volumes:
+      - ./data/postgresql:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: authentik
+      POSTGRES_USER: authentik
+      POSTGRES_PASSWORD: ${PG_PASS}
+      TZ: Asia/Seoul
     networks:
       - default
-    # ==================================================
-    # 헬스체크
-    # ==================================================
+    # server/worker가 DB 준비 완료를 기다리는 데 사용
     healthcheck:
       test:
         - CMD-SHELL
-        - redis-cli ping | grep PONG
-      start_period: 20s
-      interval: 30s
-      timeout: 10s
+        - pg_isready -d authentik -U authentik
+      interval: 10s
+      timeout: 5s
       retries: 5
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
+      start_period: 30s
     deploy:
       resources:
         limits:
-          cpus: "1.0"
-          memory: 256M
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=authentik-redis
-# ==================================================
-# 네트워크 설정
-# ==================================================
+          cpus: "2.0"
+          memory: 2G
+
 networks:
   default:
-    name: authentik-network
-  postgresql-network:
-    external: true
+    name: authentik

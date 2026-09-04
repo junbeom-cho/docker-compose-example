@@ -1,57 +1,26 @@
-# ==================================================
-# IT-Tools : 개발/운영용 웹 유틸리티 모음
-# Avg CPU: 0.5 ~ 1%
-# Avg Memory: 100MB
-# ==================================================
+# IT-Tools - 개발자용 웹 유틸리티 모음 (해시, 인코딩, JSON 포맷, UUID 생성 등)
+# 모든 기능이 브라우저에서 실행되는 정적 웹앱이라 DB나 저장 볼륨이 필요 없다.
+# 접속: http://localhost:8080
 
 services:
+  # IT-Tools 본체 (nginx-unprivileged 기반, 내부 기본 포트 8080)
   it-tools:
     image: ghcr.io/sharevb/it-tools:latest
     container_name: it-tools
-    pull_policy: always
     restart: unless-stopped
     ports:
-      - 14001:8080
+      - "8080:8080"
     environment:
-      - TZ=Asia/Seoul
-      - NODE_ENV=production
+      # nginx 로그 타임스탬프용 시간대
+      TZ: Asia/Seoul
     networks:
       - default
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      test:
-        - CMD
-        - wget
-        - --quiet
-        - --tries=1
-        - --spider
-        - http://localhost:8080
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
           cpus: "0.5"
           memory: 256M
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=it-tools
-# ==================================================
-# 네트워크 설정
-# ==================================================
+
 networks:
   default:
-    name: it-tools-network
+    name: it-tools

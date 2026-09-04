@@ -1,19 +1,31 @@
-# 홈서버는 이 파일 하나만 있으면 된다. `docker compose up -d`
-# 소스에서 직접 빌드하려면 docker-compose.build.yaml 을 겹쳐 쓴다.
+# StudyWatch - 공부 시간 스톱워치
+# 세션 시작/일시정지/종료를 기록하고 날짜별 누적 공부 시간을 모아 본다.
+# Node 프로세스 하나가 API 와 프론트 정적 파일을 같이 서빙하고, 저장소는 SQLite 다.
+# 접속: http://localhost:3000
+
 services:
+  # StudyWatch 본체 (Node, 컨테이너 내부 포트 3000)
   studywatch:
     image: ghcr.io/junbeom-cho/studywatch:latest
     container_name: studywatch
     restart: unless-stopped
-    # up 할 때마다 새 latest 를 확인한다
-    pull_policy: always
-   # ports:
-      # Tailscale 로 붙으므로 공개 인터넷에 열지 않는다 (PRD NG-2)
-      # - '${PORT:-3000}:3000'
+    ports:
+      - "3000:3000"
     environment:
-      # 학습일이 이 타임존 기준으로 정해진다
-      TZ: ${TZ:-Asia/Seoul}
-      DATA_DIR: /data
+      # 하루 경계를 컨테이너 로컬 시간으로 계산하므로 타임존을 맞춰야 한다
+      TZ: Asia/Seoul
     volumes:
-      # 바인드 마운트라 백업이 data/studywatch.db 복사 한 번으로 끝난다
-      - ${DATA_DIR}/data:/data
+      # studywatch.db 와 업로드한 스크린샷/배경 이미지가 전부 여기 쌓인다
+      # (이미지에 DATA_DIR=/data 가 이미 박혀 있어 따로 지정하지 않는다)
+      - ./data:/data
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+networks:
+  default:
+    name: studywatch

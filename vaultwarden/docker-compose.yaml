@@ -1,109 +1,49 @@
-# ==================================================
-# Vaultwarden : Bitwarden 호환 비밀번호 관리자
-# 평균 CPU : 0.5% ~ 1%
-# 평균 메모리 : 100MB
-# ==================================================
+# Vaultwarden : Bitwarden 호환 비밀번호 관리자 (Rust 구현 경량 서버)
+# 웹 볼트 UI 와 Bitwarden 공식 클라이언트(브라우저 확장/모바일 앱) 를 그대로 사용할 수 있다.
+# 데이터는 컨테이너 안 SQLite 에 저장되므로 별도 DB 서비스가 필요 없다.
+# 접속: http://localhost (관리자 페이지는 http://localhost/admin)
 
 services:
+  # Vaultwarden 본체 (컨테이너 내부 기본 포트 80)
   vaultwarden:
     image: vaultwarden/server:latest
     container_name: vaultwarden
     restart: unless-stopped
     ports:
-      - 11002:80
+      - "80:80"
     volumes:
-      - /opt/data/vaultwarden:/data/:rw
+      # SQLite DB, 첨부파일, RSA 키가 모두 여기에 저장된다
+      - ./data:/data
     environment:
-      # 외부 접속 도메인 URL
-      - DOMAIN=https://${VAULT_DOMAIN}
-      # 관리자 페이지 접근 토큰
-      - ADMIN_TOKEN=${ADMIN_TOKEN}
-      # SSO 로그인 기능 활성화 여부
-      - SSO_ENABLED=true
-      # SSO 인증 서버(Authentik) 엔드포인트
-      - SSO_AUTHORITY=https://${AUTHENTIK_DOMAIN}/application/o/${VAULT_SLUGS}/
-      # SSO OAuth 클라이언트 ID
-      - SSO_CLIENT_ID=${VAULT_CLIENT_ID}
-      # SSO OAuth 클라이언트 시크릿
-      - SSO_CLIENT_SECRET=${VAULT_CLIENT_SECRET}
-      # SSO 요청 스코프 목록
-      - SSO_SCOPES=openid email profile offline_access
-      # 미확인 이메일 계정의 로그인 허용 여부
-      - SSO_ALLOW_UNKNOWN_EMAIL_VERIFICATION=false
-      # 로컬 로그인 비활성화 후 SSO만 허용
-      - SSO_ONLY=true
-      # SSO 이메일과 기존 계정 이메일 자동 매칭 여부
-      - SSO_SIGNUPS_MATCH_EMAIL=false
-      # 신규 회원가입 허용 여부
-      - SIGNUPS_ALLOWED=false
-      # 초대 기반 사용자 생성 허용 여부
-      - INVITATIONS_ALLOWED=true
-      # 가입 시 이메일 인증 필수 여부
-      - SIGNUPS_VERIFY=true
-      # 비밀번호 힌트 표시 여부
-      - SHOW_PASSWORD_HINT=false
-      # 웹 볼트 UI 제공 여부
-      - WEB_VAULT_ENABLED=true
-      # 실시간 동기화용 WebSocket 활성화 여부
-      - WEBSOCKET_ENABLED=true
-      # Rocket 웹서버 워커 수
-      - ROCKET_WORKERS=10
-      # SMTP 서버 주소
-      - SMTP_HOST=smtp.resend.com
-      # 발신자 이메일 주소
-      - SMTP_FROM=vault@junbeom.work
-      # 발신자 표시 이름
-      - SMTP_FROM_NAME=My Vault
-      # SMTP 서버 포트
-      - SMTP_PORT=587
-      # SMTP 보안 프로토콜
-      - SMTP_SECURITY=starttls
-      # SMTP 인증 사용자명
-      - SMTP_USERNAME=resend
-      # SMTP 인증 비밀번호
-      - SMTP_PASSWORD=${SMTP_PASSWORD}
-      # SMTP 연결 타임아웃(초)
-      - SMTP_TIMEOUT=30
-      # SMTP 디버그 로그 출력 여부
-      - SMTP_DEBUG=true
-      # Tugtainer 보호 라벨 설정
-    labels:
-      dev.quenary.tugtainer.protected: "true"
+      TZ: Asia/Seoul
+      # 클라이언트에게 안내되는 접속 주소 - 외부 서비스 시 실제 도메인으로 바꾸세요
+      DOMAIN: http://localhost
+      # 관리자 페이지(/admin) 접근 토큰 - 비우면 관리자 페이지가 비활성화된다
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
+      # 신규 회원가입 허용 - 첫 계정을 만든 뒤 false 로 바꾸는 것을 권장
+      SIGNUPS_ALLOWED: "true"
+      # 가입 시 이메일 인증 요구 - 아래 SMTP 를 실제 값으로 채운 뒤 true 로 바꾸세요
+      SIGNUPS_VERIFY: "false"
+      # 로그인 화면에 비밀번호 힌트를 노출하지 않는다
+      SHOW_PASSWORD_HINT: "false"
+      # 메일 발송 설정 - 실제 SMTP 서버 값으로 바꾸세요 (미설정이어도 컨테이너는 정상 기동)
+      SMTP_HOST: smtp.example.com
+      SMTP_PORT: 587
+      SMTP_SECURITY: starttls
+      SMTP_FROM: vault@example.com
+      SMTP_FROM_NAME: My Vault
+      SMTP_USERNAME: CHANGE_ME
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      # SSO(OIDC) 로그인 - 별도 인증 서버(Authentik/Keycloak 등)가 필요해 예제에서는 끈다
+      SSO_ENABLED: "false"
     networks:
       - default
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      test:
-        - CMD
-        - curl
-        - -f
-        - http://localhost:80/alive
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
-          memory: 512M
           cpus: "1.0"
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=vaultwarden
-# ==================================================
-# 네트워크 설정
-# ==================================================
+          memory: 512M
+
 networks:
   default:
-    name: vaultwarden-network
+    name: vaultwarden

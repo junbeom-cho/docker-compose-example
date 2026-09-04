@@ -1,38 +1,79 @@
+# SnapOtter : 셀프호스팅 파일 처리 도구 모음 (이미지/영상/음성/PDF 변환, 압축, OCR 등)
+# 작업 메타데이터는 PostgreSQL, 작업 큐는 Redis 에 저장한다.
+# 처리한 파일과 AI 모델은 ./data/snapotter 에 쌓인다.
+# 최초 로그인 계정은 admin / admin 이며 첫 로그인 시 비밀번호 변경을 요구한다.
+
 services:
+  # SnapOtter 본체 (웹 UI + REST API)
   snapotter:
     image: snapotter/snapotter:2.2.0
     container_name: snapotter
-    ports:
-      - ${PORT}:1349
-    environment:
-      # Requests are served by a role that can only read and write rows. The
-      # owner connects only during boot, to migrate and to grant.
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/${POSTGRES_DB}
-      DATABASE_MIGRATION_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/${POSTGRES_DB}
-      REDIS_URL: redis://snapotter-redis:6379
-    volumes:
-      - ${DATA_DIR}:/data
-    depends_on:
-      - snapotter-redis
     restart: unless-stopped
+    ports:
+      - "1349:1349"
+    volumes:
+      # 업로드/변환 결과물과 로컬 AI 모델 저장 경로
+      - ./data/snapotter:/data
+    environment:
+      DATABASE_URL: postgres://snapotter:${POSTGRES_PASSWORD}@postgres:5432/snapotter
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        # 기동 시 DB 마이그레이션을 실행하므로 준비될 때까지 대기
+        condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - default
-      - caddy-network
-      - postgresql-network
-  
-  snapotter-redis:
+    deploy:
+      resources:
+        limits:
+          # 영상 인코딩/AI 추론이 무거워 넉넉히 잡는다
+          cpus: "4.0"
+          memory: 6G
+
+  # 작업/사용자 데이터 저장용 PostgreSQL (외부 노출 없음)
+  postgres:
+    image: postgres:17
+    container_name: snapotter-postgres
+    restart: unless-stopped
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: snapotter
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: snapotter
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U snapotter -d snapotter
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  # 파일 처리 작업 큐용 Redis (외부 노출 없음)
+  redis:
     image: redis:8-alpine
     container_name: snapotter-redis
-    volumes:
-      - ${DATA_DIR}/redis:/data
     restart: unless-stopped
+    volumes:
+      - ./data/redis:/data
     networks:
       - default
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
 
 networks:
   default:
-    name: snapotter-network
-  caddy-network:
-    external: true
-  postgresql-network:
-    external: true
+    name: snapotter

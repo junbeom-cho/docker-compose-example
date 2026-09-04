@@ -1,51 +1,59 @@
-# ==================================================
-# Authentik 서버
-# Avg CPU: 
-# Avg Memory: 
-# ==================================================
+# Dockhand : 도커 컨테이너/스택을 웹 UI에서 관리하는 도구
+# 컨테이너 상태 조회, 로그 확인, 시작/중지, 컴포즈 스택 배포를 브라우저에서 처리한다.
+# 접속: http://localhost:3000
+
 services:
+  # Dockhand 웹 UI 본체
   dockhand:
     image: fnsys/dockhand:latest
     container_name: dockhand
     restart: unless-stopped
     ports:
-      - 10009:3000
+      - "3000:3000"
     volumes:
+      # 호스트 도커 데몬 제어용 소켓
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./data:/app/data
+      - ./data/dockhand:/app/data
     environment:
-      - DATABASE_URL=postgresql://${PG_DOCKHAND_USER}:${PG_DOCKHAND_USER_PASSWORD}@${PG_HOST}:${PG_PORT}/${PG_DOCKHAND_DATABASE}
+      # DATABASE_URL 을 비우면 SQLite 로 동작한다. 여기서는 아래 postgres 서비스를 사용
+      DATABASE_URL: postgres://dockhand:${DOCKHAND_DB_PASSWORD}@postgres:5432/dockhand
+    depends_on:
+      postgres:
+        # DB 기동 완료 후에 마이그레이션이 돌아야 함
+        condition: service_healthy
     networks:
       - default
-      - postgresql_default
-# ==================================================
-# 헬스체크 - 헬스체크 커맨드가 없음
-# ==================================================
-    healthcheck:
-      disable: true
-# ==================================================
-# 리소스 제한 - 필요시 조정
-# ==================================================
     deploy:
       resources:
         limits:
           cpus: "2"
           memory: 2G
-# ==================================================
-# 로그 설정
-# ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-        labels: "service=dockhand"
 
-# ==================================================
-# 네트워크 설정
-# ==================================================
+  # Dockhand 전용 PostgreSQL (외부 노출 없이 내부 통신만)
+  postgres:
+    image: postgres:17
+    container_name: dockhand-postgres
+    restart: unless-stopped
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: dockhand
+      POSTGRES_PASSWORD: ${DOCKHAND_DB_PASSWORD}
+      POSTGRES_DB: dockhand
+    # dockhand 가 DB 준비 완료를 기다리기 위해 필요
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dockhand -d dockhand"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+
 networks:
   default:
-    name: dockhand_default
-  postgresql_default:
-    external: true
+    name: dockhand

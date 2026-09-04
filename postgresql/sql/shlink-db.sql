@@ -1,3 +1,0 @@
-CREATE USER shlink_user WITH PASSWORD '${PG_SHLINK_USER_PASSWORD}';
-CREATE DATABASE shlink_db OWNER shlink_user;
-GRANT ALL PRIVILEGES ON DATABASE shlink_db TO shlink_user;

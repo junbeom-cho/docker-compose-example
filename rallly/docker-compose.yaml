@@ -1,79 +1,80 @@
-# ==================================================
-# Rallly : 일정 투표/설문 서비스
-# 평균 CPU : 0 ~ 0.5%
-# 평균 메모리 : 300MB
-# ==================================================
+# Rallly : 여러 사람의 일정을 모아 투표로 정하는 미팅 스케줄러
+# 링크를 공유하면 참가자가 가능한 날짜/시간에 투표하고, 가장 많이 겹치는 후보를 고른다.
+# 데이터는 PostgreSQL 에 저장하며, 기동 시 DB 마이그레이션이 자동 실행된다.
+# 로그인은 이메일 인증 링크 방식이라 SMTP 설정이 있어야 계정을 만들 수 있다.
 
 services:
+  # Rallly 본체 (웹 UI + API)
   rallly:
     image: lukevella/rallly:latest
     container_name: rallly
     restart: unless-stopped
     ports:
-      - 15004:3000
+      - "3000:3000"
     environment:
-      # General
-      - NEXT_PUBLIC_BASE_URL=https://rallly.junbeom.work
-      - SECRET_PASSWORD=${RALLLY_SECRET}
-      - SUPPORT_EMAIL=rallly@junbeom.work
-      - NOREPLY_EMAIL=rallly@junbeom.work
-      - NOREPLY_EMAIL_NAME=Rallly
-      - INITIAL_ADMIN_EMAIL=dev.junbeom@gmail.com
-      # Datbase
-      - DATABASE_URL=postgres://rallly_user:${PG_RALLLY_USER_PASSWORD}@postgresql:5432/rallly_db
-      # SMTP
-      - SMTP_HOST=smtp.resend.com
-      - SMTP_PORT=465
-      - SMTP_SECURE=true
-      - SMTP_USER=resend
-      - SMTP_PWD=${RESEND_RALLLY_API_KEY}
-      - SMTP_REJECT_UNAUTHORIZED=true
-      # Auth
-      - EMAIL_LOGIN_ENABLED=true
-      - REGISTRATION_ENABLED=true
-      - ALLOWED_EMAILS=dev.junbeom@gmail.com
-      - NEXTAUTH_URL=https://rallly.junbeom.work
-      - AUTH_TRUST_HOST=true
+      # 외부 접근 기준 URL. 도메인으로 서비스하면 그 주소로 바꾼다
+      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      # 세션 암호화 키. 반드시 32자 이상
+      SECRET_PASSWORD: ${SECRET_PASSWORD}
+      # 사용자에게 노출되는 문의 메일 주소
+      SUPPORT_EMAIL: support@example.com
+      # 알림 메일 발신 주소 / 발신자 이름
+      NOREPLY_EMAIL: noreply@example.com
+      NOREPLY_EMAIL_NAME: Rallly
+      # 이 주소로 가입하면 /control-panel 관리자 기능이 열린다 (본인 메일로 바꾸세요)
+      INITIAL_ADMIN_EMAIL: admin@example.com
+      DATABASE_URL: postgres://rallly:${POSTGRES_PASSWORD}@postgres:5432/rallly
+      # 메일 발송용 SMTP. 실제 값으로 바꾸세요
+      SMTP_HOST: smtp.example.com
+      SMTP_PORT: 465
+      # 465 포트는 접속 시점부터 TLS 를 사용하므로 true
+      SMTP_SECURE: "true"
+      SMTP_USER: noreply@example.com
+      SMTP_PWD: ${SMTP_PWD}
+      SMTP_REJECT_UNAUTHORIZED: "true"
+      # 이메일 인증 링크 로그인 / 신규 가입 허용 여부
+      EMAIL_LOGIN_ENABLED: "true"
+      REGISTRATION_ENABLED: "true"
+      NEXTAUTH_URL: http://localhost:3000
+      # 리버스 프록시 뒤에서 전달받은 호스트 헤더를 신뢰
+      AUTH_TRUST_HOST: "true"
+    depends_on:
+      postgres:
+        # 기동 시 DB 마이그레이션을 실행하므로 DB 준비 완료까지 대기
+        condition: service_healthy
     networks:
       - default
-      - postgresql-network
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      test:
-        - CMD
-        - wget
-        - --quiet
-        - --tries=1
-        - --spider
-        - http://localhost:3000
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
-          memory: 1G
           cpus: "1.0"
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=rallly
-# ==================================================
-# 네트워크 설정
-# ==================================================
+          memory: 1G
+
+  # Rallly 전용 PostgreSQL (외부 노출 없이 내부 통신만)
+  postgres:
+    image: postgres:17
+    container_name: rallly-postgres
+    restart: unless-stopped
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: rallly
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: rallly
+    # rallly 가 DB 준비 완료를 기다리기 위해 필요
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rallly -d rallly"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
 networks:
   default:
-    name: rallly-network
-  postgresql-network:
-    external: true
+    name: rallly

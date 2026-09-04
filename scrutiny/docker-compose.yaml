@@ -1,79 +1,40 @@
-# ==================================================
-# Scrutiny : 디스크 S.M.A.R.T/NVMe 상태 모니터링
-# 평균 CPU : 0 ~ 0.5%
-# 평균 메모리 : 100MB
-# ==================================================
+# Scrutiny - 디스크 S.M.A.R.T / NVMe 건강 상태 모니터링
+# omnibus 이미지 하나에 웹 UI + InfluxDB + 수집기(collector)가 모두 들어있다.
+# 접속: http://localhost:8080
 
 services:
+  # Scrutiny 본체 (내부 기본 포트 8080)
   scrutiny:
     image: ghcr.io/analogj/scrutiny:master-omnibus
     container_name: scrutiny
-    privileged: true
     restart: unless-stopped
+    # smartctl 이 호스트 디스크를 직접 읽으려면 필요 (SYS_RAWIO/SYS_ADMIN + apparmor 해제를 한 번에 대체)
+    privileged: true
     ports:
-      - 12002:8080
+      - "8080:8080"
     volumes:
+      # 디스크 목록을 찾기 위한 호스트 장치 정보 (읽기 전용)
       - /run/udev:/run/udev:ro
-      - /opt/data/scrutiny/config:/opt/scrutiny/config
-      - /opt/data/scrutiny/influxdb:/opt/scrutiny/influxdb
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
       - /dev:/dev:ro
+      # 설정 파일
+      - ./config:/opt/scrutiny/config
+      # 수집한 S.M.A.R.T 이력이 쌓이는 InfluxDB 데이터
+      - ./influxdb:/opt/scrutiny/influxdb
     environment:
-      # 컨테이너 프로세스 실행 사용자 UID
-      - PUID=1000
-      # 컨테이너 프로세스 실행 그룹 GID
-      - PGID=1000
-      # 컨테이너 내부 표준 시간대
-      - TZ=Asia/Seoul
-      # SMART 수집기가 전송할 Scrutiny API 엔드포인트
-      - SCRUTINY_COLLECTOR_API_ENDPOINT=http://localhost:8080
-    # NVMe/SMART 정보 수집을 위한 권한 설정
-    cap_add:
-      - SYS_RAWIO
-      - SYS_ADMIN
-    security_opt:
-      - apparmor:unconfined
-    devices:
-      # 실제 드라이브인 nvme0n1 매핑
-      - /dev/nvme0n1:/dev/nvme0n1
-      # NVMe 컨트롤러 장치 접근
-      - /dev/nvme0:/dev/nvme0
+      TZ: Asia/Seoul
+    # 특정 디스크만 감시하고 싶으면 아래를 주석 해제하고 본인 호스트의 장치명으로 바꾼다.
+    # 장치명은 호스트마다 다르므로(없는 장치를 쓰면 컨테이너가 안 뜬다) 기본값은 비워둔다.
+    # devices:
+    #   - "/dev/sda:/dev/sda"
+    #   - "/dev/nvme0n1:/dev/nvme0n1"
     networks:
       - default
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      test:
-        - CMD
-        - curl
-        - -fsS
-        - http://localhost:8080/api/health
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
-          memory: 512M
           cpus: "1.0"
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=scrutiny
-# ==================================================
-# 네트워크 설정
-# ==================================================
+          memory: 512M
+
 networks:
   default:
-    name: scrutiny-network
+    name: scrutiny

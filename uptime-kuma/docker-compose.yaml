@@ -1,127 +1,32 @@
-# ==================================================
 # Uptime Kuma : 서비스 상태 모니터링 대시보드
-# 평균 CPU : 0.5% ~ 1%
-# 평균 메모리 : 200MB
-# ==================================================
+# HTTP/TCP/Ping 등으로 서비스 가동 여부를 주기적으로 체크하고, 장애 시 알림을 보낸다.
+# 모니터 설정과 이력 DB 는 ./data 에 쌓인다.
+# 첫 접속(http://localhost:3001)에서 관리자 계정을 직접 만든다.
 
 services:
+  # Uptime Kuma 본체 (내부 기본 포트 3001)
   uptime-kuma:
     image: louislam/uptime-kuma:2
     container_name: uptime-kuma
     restart: unless-stopped
     ports:
-      - 12000:3001
+      - "3001:3001"
     volumes:
-      - /opt/data/uptime-kuma:/app/data:rw
+      # 모니터 설정, 상태 이력 DB, 업로드 파일
+      - ./data:/app/data
     environment:
-      # 컨테이너 내부 표준 시간대
-      - TZ=Asia/Seoul
-      # 생성 파일 기본 권한 마스크
-      - UMASK=0022
-      # Node.js 실행 모드 (프로덕션 최적화)
-      - NODE_ENV=production
+      TZ: Asia/Seoul
+      # 컨테이너가 생성하는 파일의 권한 마스크
+      UMASK: "0022"
+      NODE_ENV: production
     networks:
       - default
-      - authentik-network
-      - cloudbeaver-network
-      - dockge-network
-      - dozzle-network
-      - filebrowser-network
-      - homepage-network
-      - it-tools-network
-      - mealie-network
-      - npmplus-network
-      - quartz-network
-      - paperless-network
-      - pingvin-share-x-network
-      - postgresql-network
-      - rallly-network
-      - scrutiny-network
-      - shlink-network
-      - stirling-pdf-network
-      - syncthing-network
-      - tugtainer-network
-      - vaultwarden-network
-      - outline-network
-      - affine-network
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - node
-        - test/health-check.js
-      interval: 1m
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
-          memory: 1G
           cpus: "1.0"
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=uptime-kuma
-# ==================================================
-# 네트워크 설정
-# ==================================================
+          memory: 1G
+
 networks:
   default:
-    name: uptime-kuma-network
-  authentik-network:
-    external: true
-  cloudbeaver-network:
-    external: true
-  dockge-network:
-    external: true
-  dozzle-network:
-    external: true
-  filebrowser-network:
-    external: true
-  homepage-network:
-    external: true
-  it-tools-network:
-    external: true
-  mealie-network:
-    external: true
-  npmplus-network:
-    external: true
-  quartz-network:
-    external: true
-  paperless-network:
-    external: true
-  pingvin-share-x-network:
-    external: true
-  postgresql-network:
-    external: true
-  rallly-network:
-    external: true
-  scrutiny-network:
-    external: true
-  shlink-network:
-    external: true
-  stirling-pdf-network:
-    external: true
-  syncthing-network:
-    external: true
-  tugtainer-network:
-    external: true
-  uptime-kuma-network:
-    external: true
-  vaultwarden-network:
-    external: true
-  outline-network:
-    external: true
-  affine-network:
-    external: true
+    name: uptime-kuma

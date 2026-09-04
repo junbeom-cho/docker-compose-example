@@ -1,59 +1,107 @@
-name: affine
+# AFFiNE : Notion 스타일의 문서 / 화이트보드 워크스페이스
+# affine_migration 이 DB 스키마를 먼저 만들고, 끝나면 affine 서버가 뜬다.
+# PostgreSQL 과 Redis 를 이 파일 안에 함께 띄우므로 clone 후 바로 실행 가능하다.
+# 첫 실행 후 http://localhost:3010 에서 관리자 계정을 만든다.
+
 services:
+  # AFFiNE 서버 본체
   affine:
     image: ghcr.io/toeverything/affine:stable
     container_name: affine-server
+    restart: unless-stopped
     ports:
-      - 14006:3010
+      - "3010:3010"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
       affine_migration:
         condition: service_completed_successfully
     volumes:
-      # custom configurations
-      - /opt/data/affine/storage:/root/.affine/storage
-      - /opt/data/affine/config:/root/.affine/config
+      # 업로드된 파일과 서버 설정(config.json)
+      - ./data/storage:/root/.affine/storage
+      - ./data/config:/root/.affine/config
     environment:
-      - AFFINE_SERVER_HOST=affine.junbeom.work
-      - AFFINE_SERVER_EXTERNAL_URL=https://affine.junbeom.work
-      - REDIS_SERVER_HOST=redis
-      - DATABASE_URL=${DATABASE_URL}
-      - AFFINE_INDEXER_ENABLED=false
-      - MAILER_HOST=smtp.resend.com
-      - MAILER_PORT=567
-      - MAILER_USER=resend
-      - MAILER_PASSWORD=${RESEND_API_KEY}
-      - MAILER_SENDER=affine@junbeom.work
-      - DEFAULT_LANGUAGE=ko_KR
-    restart: unless-stopped
+      # 브라우저가 실제로 접속하는 주소. 공유 링크와 메일 링크에 그대로 쓰인다
+      AFFINE_SERVER_EXTERNAL_URL: http://localhost:3010
+      DATABASE_URL: postgresql://affine:${POSTGRES_PASSWORD}@postgres:5432/affine
+      REDIS_SERVER_HOST: redis
+      # 전문 검색 인덱서(별도 서버 필요) 비활성화
+      AFFINE_INDEXER_ENABLED: "false"
+      # 메일 발송(초대/비밀번호 재설정)용 SMTP. 실제 SMTP 서버 정보로 바꾸세요
+      MAILER_HOST: smtp.example.com
+      MAILER_PORT: "587"
+      MAILER_USER: affine
+      MAILER_PASSWORD: ${MAILER_PASSWORD}
+      MAILER_SENDER: affine@example.com
     networks:
       - default
-      - postgresql-network
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+
+  # DB 스키마 마이그레이션 후 종료되는 1회성 초기화 잡
   affine_migration:
     image: ghcr.io/toeverything/affine:stable
     container_name: affine-migration
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
-      # custom configurations
-      - /opt/data/affine/storage:/root/.affine/storage
-      - /opt/data/affine/config:/root/.affine/config
+      - ./data/storage:/root/.affine/storage
+      - ./data/config:/root/.affine/config
     command:
       - sh
       - -c
       - node ./scripts/self-host-predeploy.js
     environment:
-      - REDIS_SERVER_HOST=redis
-      - DATABASE_URL=${DATABASE_URL}
-      - AFFINE_INDEXER_ENABLED=false
-    depends_on:
-      redis:
-        condition: service_healthy
+      DATABASE_URL: postgresql://affine:${POSTGRES_PASSWORD}@postgres:5432/affine
+      REDIS_SERVER_HOST: redis
+      AFFINE_INDEXER_ENABLED: "false"
     networks:
       - default
-      - postgresql-network
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  # AFFiNE 전용 PostgreSQL. AFFiNE 스키마가 vector 타입을 쓰므로 pgvector 포함 이미지가 필요하다
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: affine-postgres
+    restart: unless-stopped
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: affine
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: affine
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U affine -d affine
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  # 세션 / 실시간 동기화용 캐시
   redis:
     image: redis
     container_name: affine-redis
+    restart: unless-stopped
     healthcheck:
       test:
         - CMD
@@ -64,11 +112,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
     networks:
       - default
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
 networks:
   default:
-    name: affine-network
-  postgresql-network:
-    external: true
+    name: affine

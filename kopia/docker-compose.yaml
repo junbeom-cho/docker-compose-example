@@ -1,74 +1,51 @@
-# ==================================================
 # Kopia : 백업/스냅샷 관리 서버
-# Avg CPU: 0 ~ 1%
-# Avg Memory: 300MB
-# ==================================================
+# 웹 UI(http://localhost:51515)에서 저장소를 만들고 스냅샷을 관리한다.
+# ./backup-source 에 백업할 대상을, ./data/repository 에 로컬 저장소가 생성된다.
 
 services:
+  # Kopia 서버 (웹 UI + 백업 엔진)
   kopia:
     image: kopia/kopia:latest
     container_name: kopia
-    hostname: ${HOSTNAME:-KopiaServer}
+    # 스냅샷에 기록되는 호스트 이름
+    hostname: kopia-server
     restart: unless-stopped
     ports:
-      - 12003:51515
+      - "51515:51515"
     command:
       - server
       - start
+      # 로컬 예제용: CSRF 검사와 TLS 없이 HTTP 로 접속
       - --disable-csrf-token-checks
       - --insecure
       - --address=0.0.0.0:51515
-      - --server-username=${KOPIA_ADMIN}
+      # 웹 UI 로그인 계정
+      - --server-username=kopia
       - --server-password=${KOPIA_ADMIN_PASSWORD}
     volumes:
-      - /opt/data/kopia/config:/app/config
-      - /opt/data/kopia/cache:/app/cache
-      - /opt/data/kopia/logs:/app/logs
-      - /opt:/data/opt:ro
-      - /tmp:/tmp:shared
+      # 저장소 접속 설정 파일
+      - ./data/config:/app/config
+      # 다운로드 데이터 캐시
+      - ./data/cache:/app/cache
+      - ./data/logs:/app/logs
+      # 로컬 파일시스템 저장소를 만들 위치
+      - ./data/repository:/repository
+      # 백업할 원본 폴더 예시 (읽기 전용)
+      - ./backup-source:/data/backup-source:ro
     environment:
       # Kopia 저장소 암호
-      - KOPIA_PASSWORD=${KOPIA_REPOSITORY_PASSWORD}
-      # 컨테이너 내부 기본 사용자명
-      - USER=junbeom-cho
-      # 컨테이너 내부 표준 시간대
-      - TZ=Asia/Seoul
-      # rclone 설정 파일 경로
-      - RCLONE_CONFIG=/app/config/rclone.conf
-    cap_add:
-      - SYS_ADMIN
-    devices:
-      - /dev/fuse:/dev/fuse
-    # Tugtainer 보호 라벨 설정
-    labels:
-      dev.quenary.tugtainer.protected: "true"
+      KOPIA_PASSWORD: ${KOPIA_REPOSITORY_PASSWORD}
+      # 컨테이너 내부 기본 사용자명 (스냅샷 소유자 표기에 사용)
+      USER: kopia
+      TZ: Asia/Seoul
     networks:
       - default
-    # ==================================================
-    # 헬스체크 - 헬스체크 없음
-    # ==================================================
-    healthcheck:
-      disable: true
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
           memory: 1G
           cpus: "1.0"
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=kopia
-# ==================================================
-# 네트워크 설정
-# ==================================================
+
 networks:
   default:
-    name: kopia-network
+    name: kopia

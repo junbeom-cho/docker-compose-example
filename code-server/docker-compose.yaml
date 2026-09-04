@@ -1,20 +1,40 @@
+# code-server: 브라우저에서 쓰는 VS Code (linuxserver.io 이미지).
+# http://localhost:8443 접속 후 PASSWORD 로 로그인한다.
+# 편집할 소스는 ./workspace 에 두면 컨테이너의 /config/workspace 로 보인다.
 services:
+  # VS Code 웹 IDE 본체
   code-server:
     image: lscr.io/linuxserver/code-server:latest
     container_name: code-server
     restart: unless-stopped
     ports:
-      - 14005:8443
+      - "8443:8443"
     volumes:
-      - /opt/data/code-server/config:/config
-      - /home/junbeom/obsidian-vault:/config/workspace/obsidian-vault
+      # 확장/설정 등 code-server 자체 데이터
+      - ./config:/config
+      # 작업할 소스 폴더
+      - ./workspace:/config/workspace
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Asia/Seoul
-      - PASSWORD=${PASSWORD}
-      - SUDO_PASSWORD=${SUDO_PASSWORD}
-      - PROXY_DOMAIN=code-server.junbeom.work
-      - DEFAULT_WORKSPACE=/config/workspace
-      - PWA_APPNAME=code-server
-networks: {}
+      # 컨테이너가 파일을 만들 때 쓸 uid/gid (호스트 사용자와 맞춘다)
+      PUID: 1000
+      PGID: 1000
+      TZ: Asia/Seoul
+      # 웹 로그인 비밀번호
+      PASSWORD: ${PASSWORD}
+      # 컨테이너 터미널에서 sudo 쓸 때의 비밀번호
+      SUDO_PASSWORD: ${SUDO_PASSWORD}
+      # 접속 시 기본으로 열리는 폴더
+      DEFAULT_WORKSPACE: /config/workspace
+      # 브라우저에 설치할 때 표시되는 앱 이름
+      PWA_APPNAME: code-server
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2g
+    networks:
+      - default
+
+networks:
+  default:
+    name: code-server

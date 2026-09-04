@@ -1,3 +1,0 @@
-CREATE USER outline_user WITH PASSWORD '${PG_OUTLINE_USER_PASSWORD}';
-CREATE DATABASE outline_db OWNER outline_user;
-GRANT ALL PRIVILEGES ON DATABASE outline_db TO outline_user;

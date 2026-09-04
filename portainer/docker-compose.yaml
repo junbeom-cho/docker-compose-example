@@ -1,15 +1,29 @@
-services:
-  portainer:
-    container_name: portainer
-    image: portainer/portainer-ee:lts
-    restart: unless-stopped
-    mem_limit: 512m
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - portainer_data:/data
-    ports:
-      - 9443:9443
+# Portainer : 도커 컨테이너/이미지/볼륨/네트워크를 웹에서 관리하는 UI.
+# 호스트의 도커 소켓에 붙어서 동작하며, 설정과 DB 는 ./data 에 쌓인다.
+# 첫 접속(https://localhost:9443)에서 관리자 계정을 직접 만든다. 자체 서명 인증서라 브라우저 경고가 뜬다.
+# 이 예제는 상용 버전(portainer-ee)이라 최초 실행 후 라이선스 키 입력이 필요하다. 무료로 쓰려면 이미지를 portainer/portainer-ce:lts 로 바꾼다.
 
-volumes:
-  portainer_data:
-    name: portainer_data
+services:
+  # Portainer 서버 본체 (기본 포트 9443 = HTTPS UI)
+  portainer:
+    image: portainer/portainer-ee:lts
+    container_name: portainer
+    restart: unless-stopped
+    ports:
+      - "9443:9443"
+    volumes:
+      # 호스트 도커 데몬 제어용 소켓 (이게 없으면 아무 컨테이너도 못 본다)
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Portainer 내부 DB, 사용자 계정, 스택 정의
+      - ./data:/data
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+networks:
+  default:
+    name: portainer

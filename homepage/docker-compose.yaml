@@ -1,131 +1,37 @@
-# ==================================================
-# Homepage : 사용자/관리자 대시보드
-# ==================================================
+# Homepage : 셀프호스팅 서비스 링크와 상태를 한 화면에 모아주는 대시보드.
+# 첫 실행 시 ./config 아래에 기본 설정 파일(services.yaml 등)이 자동 생성되며,
+# 그 파일들을 편집해 대시보드를 구성한다. docker.sock 을 읽기 전용으로 붙여
+# 실행 중인 컨테이너 상태도 함께 표시할 수 있다.
 
 services:
-  # ==================================================
-  # 사용자용 Homepage
-  # Avg CPU: 0.5 ~ 1%
-  # Avg Memory: 100MB
-  # ==================================================
-  user_homepage:
+  # 대시보드 본체 (웹 UI)
+  homepage:
     image: ghcr.io/gethomepage/homepage:latest
-    container_name: user_homepage
+    container_name: homepage
     restart: unless-stopped
     ports:
-      - 15001:3000
+      - "3000:3000"
     volumes:
-      - /opt/stacks/homepage/user_config:/app/config:rw
-      - /opt/stacks/homepage/icons:/app/config/icons:rw
+      # 대시보드 설정 파일 (비어 있으면 기본 설정이 생성됨)
+      - ./config:/app/config
+      # 컨테이너 목록/상태 조회용 (읽기 전용)
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      # 컨테이너 내부 표준 시간대
-      - TZ=Asia/Seoul
-      # 컨테이너 프로세스 실행 사용자 UID
-      - PUID=$PUID
-      # 컨테이너 프로세스 실행 그룹 GID
-      - PGID=$PGID
-      # 접근 허용 Host 헤더 목록 ("*"는 모든 호스트)
-      - HOMEPAGE_ALLOWED_HOSTS=*
-      # Node.js 실행 모드 (프로덕션 최적화)
-      - NODE_ENV=production
+      TZ: Asia/Seoul
+      # 컨테이너 프로세스 실행 UID/GID
+      PUID: 1000
+      PGID: 1000
+      # 접근 허용 Host 헤더 (필수). "*"는 모든 호스트 허용
+      HOMEPAGE_ALLOWED_HOSTS: "*"
+      NODE_ENV: production
     networks:
       - default
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      test:
-        - CMD
-        - wget
-        - --quiet
-        - --tries=1
-        - --spider
-        - http://localhost:3000
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
           cpus: "0.5"
           memory: 512M
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=user_homepage
-  # ==================================================
-  # 관리자용 Homepage
-  # Avg CPU: 0.5 ~ 1%
-  # Avg Memory: 100MB
-  # ==================================================
-  admin_homepage:
-    image: ghcr.io/gethomepage/homepage:latest
-    container_name: admin_homepage
-    restart: unless-stopped
-    ports:
-      - 15000:3000
-    volumes:
-      - /opt/stacks/homepage/admin_config:/app/config:rw
-      - /opt/stacks/homepage/icons:/app/config/icons:rw
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      # 컨테이너 내부 표준 시간대
-      - TZ=Asia/Seoul
-      # 컨테이너 프로세스 실행 사용자 UID
-      - PUID=$PUID
-      # 컨테이너 프로세스 실행 그룹 GID
-      - PGID=$PGID
-      # 접근 허용 Host 헤더 목록 ("*"는 모든 호스트)
-      - HOMEPAGE_ALLOWED_HOSTS=*
-      # Node.js 실행 모드 (프로덕션 최적화)
-      - NODE_ENV=production
-    networks:
-      - default
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      test:
-        - CMD
-        - wget
-        - --quiet
-        - --tries=1
-        - --spider
-        - http://localhost:3000
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=admin_homepage
-# ==================================================
-# 네트워크 설정
-# ==================================================
+
 networks:
   default:
-    name: homepage-network
+    name: homepage

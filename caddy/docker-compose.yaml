@@ -1,4 +1,9 @@
+# Caddy 리버스 프록시 / 웹서버. Cloudflare DNS 모듈이 포함된 빌드라
+# DNS-01 챌린지로 와일드카드 인증서까지 자동 발급받을 수 있다.
+# 그냥 띄우면 이미지에 내장된 Caddyfile 이 http://localhost 에 환영 페이지를 보여준다.
+
 services:
+  # Caddy 본체 (80/443 자동 HTTPS)
   caddy:
     image: ghcr.io/caddybuilds/caddy-cloudflare:2.11.4
     container_name: caddy
@@ -6,20 +11,28 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      # HTTP/3(QUIC)용 UDP
       - "443:443/udp"
     environment:
+      # Caddyfile 안에서 {env.CF_API_TOKEN} 으로 참조한다 (DNS-01 챌린지용)
       CF_API_TOKEN: ${CF_API_TOKEN}
     volumes:
-      - ${DATA_DIR}/conf:/etc/caddy:ro
-      - ${DATA_DIR}/site:/srv:ro
-      - ${DATA_DIR}/data:/data
-      - ${DATA_DIR}/config:/config
-    dns:
-      - 1.1.1.1
-      - 1.0.0.1
+      # 정적 파일 루트. Caddyfile 에 `root * /srv` 로 쓰면 된다
+      - ./site:/srv
+      # 발급받은 인증서와 키. 지우면 전부 재발급된다
+      - ./data:/data
+      # Caddy 내부 상태(autosave.json)
+      - ./config:/config
+      # 직접 만든 설정을 쓰려면 ./conf/Caddyfile 을 먼저 만든 뒤 주석을 푼다 (빈 디렉터리면 부팅 실패)
+      # - ./conf:/etc/caddy
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
     networks:
       - default
 
 networks:
   default:
-    name: caddy-network
+    name: caddy

@@ -1,61 +1,39 @@
-# ==================================================
-# Syncthing : 파일 동기화 서비스
-# Avg CPU: 0 ~ 0.5%
-# Avg Memory: 100MB
-# ==================================================
+# Syncthing - 여러 기기 사이의 파일을 P2P 로 동기화하는 서비스
+# 중앙 서버 없이 기기끼리 직접 연결되며, 웹 UI 에서 동기화할 폴더와 상대 기기를 등록한다.
+# ./sync 폴더가 동기화 대상이고, ./config 에 기기 ID 와 설정이 저장된다.
+# 접속: http://localhost:8384
 
 services:
+  # Syncthing 본체 (웹 UI 8384, 동기화 22000, 디스커버리 21027)
   syncthing:
     image: lscr.io/linuxserver/syncthing:2.0.15
     container_name: syncthing
     restart: unless-stopped
     ports:
-      - 13002:8384
-      - 13003:22000/tcp
-      - 13003:22000/udp
-      - 13004:21027/udp
+      - "8384:8384"
+      # 기기 간 데이터 전송 포트 (TCP + QUIC)
+      - "22000:22000/tcp"
+      - "22000:22000/udp"
+      # 같은 네트워크의 기기를 자동 검색하는 브로드캐스트 포트
+      - "21027:21027/udp"
     volumes:
-      - /opt/data/syncthing:/config
-      - /home/junbeom/obsidian-vault:/obsidian-vault
+      - ./config:/config
+      # 동기화할 폴더 - 웹 UI 에서 /sync 경로로 등록한다
+      - ./sync:/sync
     environment:
       # 컨테이너 프로세스 실행 사용자 UID
-      - PUID=1000
+      PUID: 1000
       # 컨테이너 프로세스 실행 그룹 GID
-      - PGID=1000
-      # 컨테이너 내부 표준 시간대
-      - TZ=Asia/Seoul
+      PGID: 1000
+      TZ: Asia/Seoul
     networks:
       - default
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      test: curl -fkLsS -m 2 127.0.0.1:8384/rest/noauth/health | grep -o --color=never
-        OK || exit 1
-      interval: 1m
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
     deploy:
       resources:
         limits:
-          memory: 1G
           cpus: "1.0"
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=syncthing
-# ==================================================
-# 네트워크 설정
-# ==================================================
+          memory: 1G
+
 networks:
   default:
-    name: syncthing-network
+    name: syncthing

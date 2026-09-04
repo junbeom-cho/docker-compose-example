@@ -1,62 +1,32 @@
-# ==================================================
-# File Browser : 웹 기반 파일 탐색기
-# Avg CPU : 0 ~ 1%
-# Avg Memory : 20MB
-# ==================================================
+# File Browser: 브라우저에서 파일을 올리고 내리고 편집하는 웹 파일 탐색기.
+# ./data/srv 아래에 둔 파일이 웹 UI 에 노출된다.
+# 최초 실행 시 admin 계정의 임의 비밀번호가 로그에 찍힌다: docker compose logs filebrowser
 
 services:
+  # 웹 파일 탐색기 본체
   filebrowser:
     image: filebrowser/filebrowser:latest
     container_name: filebrowser
     restart: unless-stopped
+    # 이미지 기본 사용자가 uid 1000 이라, 도커가 root 로 새로 만든 바인드 폴더에 쓰지 못한다
+    user: "0:0"
     ports:
-      - 13001:80
+      - "80:80"
     volumes:
-      - /opt/data/filebrowser/database:/database
-      - /opt/data/filebrowser/config:/config
-      - /opt/data/filebrowser/srv:/srv
-    environment:
-      # 컨테이너 프로세스 실행 그룹 GID
-      - PGID=1000
-      # 컨테이너 프로세스 실행 사용자 UID
-      - PUID=1000
-    networks:
-      - default
-    # ==================================================
-    # 헬스체크
-    # ==================================================
-    healthcheck:
-      test:
-        - CMD
-        - wget
-        - --quiet
-        - --tries=1
-        - --spider
-        - http://localhost:80
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    # ==================================================
-    # 리소스 제한 - 필요시 조정
-    # ==================================================
+      # 사용자/설정 DB (filebrowser.db)
+      - ./data/database:/database
+      # settings.json - 비어 있으면 컨테이너가 기본값으로 만들어준다
+      - ./data/config:/config
+      # 웹에서 탐색할 실제 파일 저장소
+      - ./data/srv:/srv
     deploy:
       resources:
         limits:
           cpus: "0.5"
           memory: 256M
-    # ==================================================
-    # 로그 설정
-    # ==================================================
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-        labels: service=filebrowser
-# ==================================================
-# 네트워크 설정
-# ==================================================
+    networks:
+      - default
+
 networks:
   default:
-    name: filebrowser-network
+    name: filebrowser

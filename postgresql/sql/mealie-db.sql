@@ -1,3 +1,0 @@
-CREATE USER mealie_user WITH PASSWORD '${PG_MEALIE_USER_PASSWORD}';
-CREATE DATABASE mealie_db OWNER mealie_user;
-GRANT ALL PRIVILEGES ON DATABASE mealie_db TO mealie_user;
