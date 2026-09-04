@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     # up 할 때마다 새 latest 를 확인한다
     pull_policy: always
-    ports:
+   # ports:
       # Tailscale 로 붙으므로 공개 인터넷에 열지 않는다 (PRD NG-2)
       # - '${PORT:-3000}:3000'
     environment:
